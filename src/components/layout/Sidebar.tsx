@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/contacts", label: "Contacts", icon: "👤" },
   { href: "/opportunities", label: "Pipeline", icon: "📊" },
   { href: "/activities", label: "Activities", icon: "📋" },
+  { href: "/import", label: "Import CSV", icon: "📥" },
 ];
 
 export default function Sidebar() {
