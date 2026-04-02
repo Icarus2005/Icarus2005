@@ -22,9 +22,9 @@ export default function Sidebar() {
           <div className="w-7 h-7 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
             I
           </div>
-          <span className="text-white font-semibold text-sm">Icarus CRM</span>
+          <span className="text-white font-semibold text-sm">IRL Menat CRM</span>
         </div>
-        <p className="text-brand-400 text-xs mt-0.5 ml-9">GCC Sales</p>
+        <p className="text-brand-400 text-xs mt-0.5 ml-9">MENAT Sales</p>
       </div>
 
       {/* Nav */}
@@ -53,7 +53,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-brand-900">
-        <p className="text-brand-500 text-xs">GCC Mobility Data &amp; Consulting</p>
+        <p className="text-brand-500 text-xs">MENAT Mobility Data &amp; Consulting</p>
       </div>
     </aside>
   );
