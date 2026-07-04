@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { DEAL_STAGES, DEAL_STAGE_ORDER, DEAL_TYPES } from "@/lib/constants";
 
-export default function NewOpportunityPage() {
+function NewOpportunityPageForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillAccountId = searchParams.get("accountId") ?? "";
@@ -73,15 +73,15 @@ export default function NewOpportunityPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Stage</label>
-            <select name="stage" defaultValue="LEAD" className="input">
+            <select name="stage" defaultValue="IDENTIFIED" className="input">
               {DEAL_STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>{DEAL_STAGES[s]}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="label">Type</label>
-            <select name="type" defaultValue="DATA_PRODUCT" className="input">
+            <label className="label">Product</label>
+            <select name="type" defaultValue="MAYA" className="input">
               {Object.entries(DEAL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
@@ -105,6 +105,16 @@ export default function NewOpportunityPage() {
           <input name="expectedCloseDate" type="date" className="input" />
         </div>
 
+        <div className="flex items-center gap-2">
+          <input
+            id="dmFlag"
+            name="decisionMakerEngaged"
+            type="checkbox"
+            className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          <label htmlFor="dmFlag" className="text-sm text-gray-700">Decision maker engaged</label>
+        </div>
+
         <div>
           <label className="label">Notes</label>
           <textarea name="notes" rows={3} className="input resize-none" placeholder="Context, requirements, key info..." />
@@ -118,5 +128,13 @@ export default function NewOpportunityPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewOpportunityPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-400">Loading...</div>}>
+      <NewOpportunityPageForm />
+    </Suspense>
   );
 }

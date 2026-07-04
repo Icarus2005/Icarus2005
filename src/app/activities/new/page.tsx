@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ACTIVITY_TYPES } from "@/lib/constants";
 
-export default function NewActivityPage() {
+function NewActivityPageForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillAccountId = searchParams.get("accountId") ?? "";
   const prefillContactId = searchParams.get("contactId") ?? "";
   const prefillOpportunityId = searchParams.get("opportunityId") ?? "";
+  const prefillLeadId = searchParams.get("leadId") ?? "";
 
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
   const [opportunities, setOpportunities] = useState<{ id: string; name: string }[]>([]);
+  const [leads, setLeads] = useState<{ id: string; name: string; company: string | null }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,10 +25,12 @@ export default function NewActivityPage() {
       fetch("/api/accounts").then((r) => r.json()),
       fetch("/api/contacts").then((r) => r.json()),
       fetch("/api/opportunities").then((r) => r.json()),
-    ]).then(([a, c, o]) => {
+      fetch("/api/leads").then((r) => r.json()),
+    ]).then(([a, c, o, l]) => {
       setAccounts(a);
       setContacts(c);
       setOpportunities(o);
+      setLeads(l);
     });
   }, []);
 
@@ -43,7 +47,8 @@ export default function NewActivityPage() {
     });
     if (res.ok) {
       // Navigate back contextually
-      if (prefillOpportunityId) router.push(`/opportunities/${prefillOpportunityId}`);
+      if (prefillLeadId) router.push(`/leads/${prefillLeadId}`);
+      else if (prefillOpportunityId) router.push(`/opportunities/${prefillOpportunityId}`);
       else if (prefillAccountId) router.push(`/accounts/${prefillAccountId}`);
       else router.push("/activities");
     } else {
@@ -89,6 +94,18 @@ export default function NewActivityPage() {
         </div>
 
         <div>
+          <label className="label">Lead</label>
+          <select name="leadId" defaultValue={prefillLeadId} className="input">
+            <option value="">Select lead...</option>
+            {leads.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}{l.company ? ` (${l.company})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="label">Account</label>
           <select name="accountId" defaultValue={prefillAccountId} className="input">
             <option value="">Select account...</option>
@@ -131,5 +148,13 @@ export default function NewActivityPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewActivityPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-400">Loading...</div>}>
+      <NewActivityPageForm />
+    </Suspense>
   );
 }

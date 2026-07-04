@@ -64,15 +64,15 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Stage</label>
-            <select name="stage" defaultValue={String(opp.stage ?? "LEAD")} className="input">
+            <select name="stage" defaultValue={String(opp.stage ?? "IDENTIFIED")} className="input">
               {DEAL_STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>{DEAL_STAGES[s]}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="label">Type</label>
-            <select name="type" defaultValue={String(opp.type ?? "DATA_PRODUCT")} className="input">
+            <label className="label">Product</label>
+            <select name="type" defaultValue={String(opp.type ?? "MAYA")} className="input">
               {Object.entries(DEAL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
@@ -93,6 +93,17 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
           <label className="label">Expected Close Date</label>
           <input name="expectedCloseDate" type="date" defaultValue={closeDate} className="input" />
         </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="dmFlag"
+            name="decisionMakerEngaged"
+            type="checkbox"
+            defaultChecked={Boolean(opp.decisionMakerEngaged)}
+            className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          <label htmlFor="dmFlag" className="text-sm text-gray-700">Decision maker engaged</label>
+        </div>
+
         <div>
           <label className="label">Notes</label>
           <textarea name="notes" rows={3} defaultValue={String(opp.notes ?? "")} className="input resize-none" />

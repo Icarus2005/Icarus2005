@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
   const accounts = await prisma.account.findMany({ select: { id: true, name: true } });
   const accountMap = new Map(accounts.map((a) => [a.name.toLowerCase().trim(), a.id]));
 
-  const VALID_STAGES = ["LEAD", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"];
-  const VALID_TYPES = ["DATA_PRODUCT", "CONSULTING", "BOTH"];
+  const VALID_STAGES = ["IDENTIFIED", "QUALIFIED", "DEMO_SCHEDULED", "PROPOSAL_SENT", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"];
+  const VALID_TYPES = ["MAYA", "METRICS_PRO", "CONSULTING", "OTHER"];
 
   const results = { created: 0, skipped: 0, errors: [] as string[] };
 
@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
         data: {
           name,
           accountId,
-          stage: VALID_STAGES.includes(stage) ? stage : "LEAD",
-          type: VALID_TYPES.includes(type) ? type : "DATA_PRODUCT",
+          stage: VALID_STAGES.includes(stage) ? stage : "IDENTIFIED",
+          type: VALID_TYPES.includes(type) ? type : "OTHER",
           value: value && !isNaN(value) ? value : null,
           probability: probability && !isNaN(probability) ? Math.min(100, Math.max(0, probability)) : null,
           expectedCloseDate,

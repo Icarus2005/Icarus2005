@@ -4,122 +4,132 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Accounts
-  const acme = await prisma.account.create({
+  const emaar = await prisma.account.create({
     data: {
-      name: "ACME Real Estate",
-      industry: "Real Estate",
+      name: "Emaar Malls",
+      industry: "Retail",
       country: "UAE",
       sector: "PRIVATE",
-      size: "LARGE",
-      website: "https://acme-re.ae",
-      description: "Leading real estate developer in Dubai",
+      size: "ENTERPRISE",
+      locationsCount: 12,
+      website: "https://emaarmalls.com",
+      description: "Mall operator across Dubai",
+      pastEngagements: "Footfall analytics pilot (2025)",
     },
   });
 
-  const rta = await prisma.account.create({
+  const stcGroup = await prisma.account.create({
     data: {
-      name: "Roads & Transport Authority",
-      industry: "Transportation",
-      country: "UAE",
+      name: "Saudi Tourism Authority",
+      industry: "Tourism",
+      country: "SAUDI_ARABIA",
       sector: "GOVERNMENT",
       size: "ENTERPRISE",
-      description: "Dubai government transport authority",
-    },
-  });
-
-  const saudiTel = await prisma.account.create({
-    data: {
-      name: "Saudi Telecom Co.",
-      industry: "Telecommunications",
-      country: "SAUDI_ARABIA",
-      sector: "SEMI_GOVERNMENT",
-      size: "ENTERPRISE",
-      website: "https://stc.com.sa",
+      description: "National tourism body, KSA",
     },
   });
 
   // Contacts
-  const contact1 = await prisma.contact.create({
+  const c1 = await prisma.contact.create({
     data: {
-      firstName: "Ahmed",
-      lastName: "Al-Rashidi",
-      email: "ahmed@acme-re.ae",
-      phone: "+971-50-123-4567",
-      title: "Head of Strategy",
-      role: "DECISION_MAKER",
-      accountId: acme.id,
-    },
-  });
-
-  const contact2 = await prisma.contact.create({
-    data: {
-      firstName: "Sara",
-      lastName: "Al-Mansouri",
-      email: "sara.mansouri@rta.ae",
-      phone: "+971-4-234-5678",
-      title: "Director of Smart Mobility",
+      firstName: "Layla",
+      lastName: "Haddad",
+      email: "layla@emaarmalls.com",
+      title: "Head of Insights",
       role: "CHAMPION",
-      accountId: rta.id,
+      linkedin: "https://linkedin.com/in/laylahaddad",
+      accountId: emaar.id,
     },
   });
 
-  const contact3 = await prisma.contact.create({
+  const c2 = await prisma.contact.create({
     data: {
-      firstName: "Khalid",
-      lastName: "Al-Otaibi",
-      email: "k.otaibi@stc.com.sa",
-      phone: "+966-11-500-0000",
-      title: "VP Business Development",
+      firstName: "Fahad",
+      lastName: "Al-Qahtani",
+      email: "f.qahtani@sta.gov.sa",
+      title: "Director of Digital",
       role: "DECISION_MAKER",
-      accountId: saudiTel.id,
+      accountId: stcGroup.id,
     },
   });
 
   // Opportunities
   const opp1 = await prisma.opportunity.create({
     data: {
-      name: "Mobility Data Subscription - Dubai",
-      stage: "PROPOSAL",
-      type: "DATA_PRODUCT",
-      value: 120000,
-      probability: 60,
-      expectedCloseDate: new Date("2026-06-30"),
-      accountId: acme.id,
-      notes: "Annual subscription for footfall and mobility insights across their 5 properties.",
+      name: "MAYA Deployment - Dubai Malls",
+      stage: "PROPOSAL_SENT",
+      type: "MAYA",
+      value: 180000,
+      probability: 55,
+      decisionMakerEngaged: true,
+      expectedCloseDate: new Date("2026-09-30"),
+      accountId: emaar.id,
+      notes: "MAYA rollout across 3 flagship malls. Proposal v2 sent.",
     },
   });
 
   const opp2 = await prisma.opportunity.create({
     data: {
-      name: "Smart Mobility Consulting",
-      stage: "NEGOTIATION",
-      type: "CONSULTING",
-      value: 350000,
-      probability: 75,
-      expectedCloseDate: new Date("2026-05-15"),
-      accountId: rta.id,
-      notes: "3-month engagement to analyse commute patterns and recommend route optimizations.",
-    },
-  });
-
-  const opp3 = await prisma.opportunity.create({
-    data: {
-      name: "GCC Telecom Mobility Report",
-      stage: "QUALIFIED",
-      type: "DATA_PRODUCT",
-      value: 85000,
+      name: "Metrics Pro - Tourism Dashboards",
+      stage: "DEMO_SCHEDULED",
+      type: "METRICS_PRO",
+      value: 95000,
       probability: 40,
-      expectedCloseDate: new Date("2026-08-01"),
-      accountId: saudiTel.id,
+      expectedCloseDate: new Date("2026-10-15"),
+      accountId: stcGroup.id,
+      notes: "Demo scheduled with digital team.",
     },
   });
 
-  // Link contacts to opportunities
   await prisma.opportunityContact.createMany({
     data: [
-      { opportunityId: opp1.id, contactId: contact1.id },
-      { opportunityId: opp2.id, contactId: contact2.id },
-      { opportunityId: opp3.id, contactId: contact3.id },
+      { opportunityId: opp1.id, contactId: c1.id },
+      { opportunityId: opp2.id, contactId: c2.id },
+    ],
+  });
+
+  // Leads
+  await prisma.lead.createMany({
+    data: [
+      {
+        name: "Omar Nasser",
+        company: "Alshaya Group",
+        title: "VP Retail Tech",
+        email: "omar.n@alshaya.com",
+        region: "KUWAIT",
+        sector: "Retail",
+        productInterest: "MAYA",
+        digitalMaturity: "HIGH",
+        source: "EVENT",
+        tags: "GITEX, priority",
+        status: "CONTACTED",
+        score: 78,
+        notes: "Met at GITEX. Interested in MAYA for flagship stores.",
+      },
+      {
+        name: "Sara Aziz",
+        company: "Jeddah Season",
+        title: "Events Director",
+        region: "SAUDI_ARABIA",
+        sector: "Entertainment",
+        productInterest: "METRICS_PRO",
+        digitalMaturity: "MEDIUM",
+        source: "REFERRAL",
+        status: "NEW",
+        score: 55,
+      },
+      {
+        name: "Karim Fares",
+        company: "Spinneys",
+        title: "Head of Operations",
+        region: "UAE",
+        sector: "F&B",
+        productInterest: "CONSULTING",
+        digitalMaturity: "LOW",
+        source: "OUTBOUND",
+        status: "NEW",
+        score: 32,
+      },
     ],
   });
 
@@ -128,44 +138,47 @@ async function main() {
     data: [
       {
         type: "MEETING",
-        subject: "Initial discovery call",
-        notes: "Discussed data needs around footfall analytics for their retail properties.",
-        date: new Date("2026-03-10"),
-        accountId: acme.id,
-        contactId: contact1.id,
+        subject: "Proposal walkthrough with Layla",
+        notes: "Positive. Asked for phased pricing.",
+        date: new Date("2026-06-20"),
+        accountId: emaar.id,
+        contactId: c1.id,
         opportunityId: opp1.id,
       },
       {
-        type: "DEMO",
-        subject: "Platform demo - mobility dashboard",
-        notes: "Showed live GCC mobility data. Very positive response from Sara.",
-        date: new Date("2026-03-18"),
-        accountId: rta.id,
-        contactId: contact2.id,
-        opportunityId: opp2.id,
-      },
-      {
         type: "EMAIL",
-        subject: "Sent proposal document",
-        notes: "Attached pricing and scope for the consulting engagement.",
-        date: new Date("2026-03-25"),
-        accountId: rta.id,
-        contactId: contact2.id,
+        subject: "Demo agenda sent",
+        date: new Date("2026-06-28"),
+        accountId: stcGroup.id,
+        contactId: c2.id,
         opportunityId: opp2.id,
-      },
-      {
-        type: "CALL",
-        subject: "Follow-up with Khalid",
-        notes: "He needs internal approval from CFO before moving forward.",
-        date: new Date("2026-03-28"),
-        accountId: saudiTel.id,
-        contactId: contact3.id,
-        opportunityId: opp3.id,
       },
     ],
   });
 
-  console.log("Seed complete.");
+  // Tasks
+  await prisma.task.createMany({
+    data: [
+      {
+        title: "Send phased pricing option to Emaar",
+        dueDate: new Date("2026-07-08"),
+        opportunityId: opp1.id,
+        accountId: emaar.id,
+      },
+      {
+        title: "Prepare Metrics Pro demo environment",
+        dueDate: new Date("2026-07-10"),
+        opportunityId: opp2.id,
+        accountId: stcGroup.id,
+      },
+      {
+        title: "Follow up with Omar Nasser (Alshaya)",
+        dueDate: new Date("2026-07-05"),
+      },
+    ],
+  });
+
+  console.log("ArqOne seed complete.");
 }
 
 main()

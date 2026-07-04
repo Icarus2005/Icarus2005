@@ -14,6 +14,7 @@ export async function GET(
         include: { contact: true },
         orderBy: { date: "desc" },
       },
+      tasks: { orderBy: { dueDate: "asc" } },
     },
   });
   if (!opp) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -25,6 +26,22 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const body = await req.json();
+  if (body.value !== undefined) body.value = Number(body.value) || null;
+  if (body.probability !== undefined) body.probability = Number(body.probability) || null;
+  if (body.expectedCloseDate) body.expectedCloseDate = new Date(body.expectedCloseDate);
+  body.decisionMakerEngaged = body.decisionMakerEngaged === true || body.decisionMakerEngaged === "on";
+
+  // Stamp closedAt on transition into a closed stage (drives time-to-close KPI)
+  if (body.stage) {
+    const existing = await prisma.opportunity.findUnique({
+      where: { id: params.id },
+      select: { closedAt: true },
+    });
+    const closing = ["CLOSED_WON", "CLOSED_LOST"].includes(body.stage);
+    if (closing && !existing?.closedAt) body.closedAt = new Date();
+    if (!closing) body.closedAt = null;
+  }
+
   const opp = await prisma.opportunity.update({
     where: { id: params.id },
     data: body,

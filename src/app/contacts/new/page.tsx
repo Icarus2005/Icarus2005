@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CONTACT_ROLES } from "@/lib/constants";
 
-export default function NewContactPage() {
+function NewContactPageForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillAccountId = searchParams.get("accountId") ?? "";
@@ -99,6 +99,11 @@ export default function NewContactPage() {
           </div>
         </div>
 
+        <div>
+          <label className="label">LinkedIn</label>
+          <input name="linkedin" type="url" className="input" placeholder="https://linkedin.com/in/..." />
+        </div>
+
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? "Saving..." : "Create Contact"}
@@ -107,5 +112,13 @@ export default function NewContactPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewContactPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-400">Loading...</div>}>
+      <NewContactPageForm />
+    </Suspense>
   );
 }

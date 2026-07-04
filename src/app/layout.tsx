@@ -6,8 +6,8 @@ import Sidebar from "@/components/layout/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "IRL Menat CRM",
-  description: "Internal sales CRM for MENAT mobility data & consulting",
+  title: "ArqOne CRM",
+  description: "ArqOne Labs internal sales CRM — leads, pipeline, and client management",
 };
 
 export default function RootLayout({

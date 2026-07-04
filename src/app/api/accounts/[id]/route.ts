@@ -27,6 +27,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const body = await req.json();
+  if (body.locationsCount !== undefined) body.locationsCount = Number(body.locationsCount) || null;
   const account = await prisma.account.update({
     where: { id: params.id },
     data: body,

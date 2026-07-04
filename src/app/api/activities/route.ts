@@ -5,6 +5,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const accountId = searchParams.get("accountId") ?? "";
   const opportunityId = searchParams.get("opportunityId") ?? "";
+  const leadId = searchParams.get("leadId") ?? "";
   const type = searchParams.get("type") ?? "";
 
   const activities = await prisma.activity.findMany({
@@ -12,10 +13,12 @@ export async function GET(req: NextRequest) {
       AND: [
         accountId ? { accountId } : {},
         opportunityId ? { opportunityId } : {},
+        leadId ? { leadId } : {},
         type ? { type } : {},
       ],
     },
     include: {
+      lead: { select: { id: true, name: true, company: true } },
       account: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
       opportunity: { select: { id: true, name: true } },
@@ -28,9 +31,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  if (body.date) body.date = new Date(body.date);
   const activity = await prisma.activity.create({
     data: body,
     include: {
+      lead: { select: { id: true, name: true } },
       account: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
       opportunity: { select: { id: true, name: true } },

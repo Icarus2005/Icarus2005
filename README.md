@@ -1,11 +1,11 @@
-# Icarus CRM
+# ArqOne CRM
 
-Internal sales CRM for GCC mobility data & consulting.
+Internal sales CRM for ArqOne Labs — leads, pipeline, client management, and sales tracking.
 
 ## Stack
 
 - **Next.js 14** (App Router, TypeScript)
-- **Prisma** ORM + **SQLite** (dev) — swap `DATABASE_URL` for PostgreSQL in prod
+- **Prisma** ORM + **SQLite** (dev) — swap `DATABASE_URL` provider for Supabase Postgres in prod
 - **Tailwind CSS**
 
 ## Getting Started
@@ -14,7 +14,7 @@ Internal sales CRM for GCC mobility data & consulting.
 # 1. Install dependencies
 npm install
 
-# 2. Set up the database
+# 2. Set up the database (fresh install or after schema changes)
 npx prisma migrate dev --name init
 
 # 3. (Optional) Seed with sample data
@@ -26,26 +26,38 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+> **Upgrading from an older version?** The v2 schema changed deal stages and added
+> Leads/Tasks. Easiest path: delete `prisma/dev.db`, then re-run steps 2–3.
+
 ## Modules
 
-| Page | Route |
-|------|-------|
-| Dashboard | `/` |
-| Accounts | `/accounts` |
-| Contacts | `/contacts` |
-| Pipeline | `/opportunities` |
-| Activities | `/activities` |
+| Page | Route | Notes |
+|------|-------|-------|
+| Dashboard | `/` | KPIs, pipeline by stage, win/loss by vertical, time-to-close, tasks |
+| Leads | `/leads` | Status funnel (New → Contacted → Qualified), score, convert-to-deal |
+| Pipeline | `/opportunities` | Kanban board + list, 7 stages |
+| Accounts | `/accounts` | Companies with country/sector/vertical segmentation |
+| Contacts | `/contacts` | People with roles, LinkedIn |
+| Tasks | `/tasks` | Follow-ups with due dates, overdue highlighting |
+| Activities | `/activities` | Meetings, calls, emails, demos, notes |
+| Import CSV | `/import` | Bulk import incl. legacy pipeline-sheet format |
 
 ## Data Model
 
-- **Account** — company (GCC country, sector, industry)
-- **Contact** — person at an account (role: Decision Maker, Champion, etc.)
-- **Opportunity** — deal linked to an account (Data Product or Consulting)
-- **Activity** — meeting, call, email, demo, note (linked to account/contact/opportunity)
+- **Lead** — pre-qualification prospect (status, score, product interest, digital maturity, source). Converts into Account + Contact + Opportunity.
+- **Account** — company (country, sector, vertical, # locations, past engagements)
+- **Contact** — person at an account (role, LinkedIn)
+- **Opportunity** — deal: Identified → Qualified → Demo Scheduled → Proposal Sent → Negotiation → Closed Won/Lost. Product: MAYA, Metrics Pro, Consulting.
+- **Task** — follow-up with due date, linked to lead/deal/account/contact
+- **Activity** — logged interaction, linked to lead/account/contact/deal
+
+## Roadmap (per project brief)
+
+- [ ] Supabase migration (Postgres + Auth with Sales Director / Executive / Viewer roles)
+- [ ] Make automations (lead scoring, follow-up reminders, weekly digest)
+- [ ] AI sales assistant (email drafts, lead qualification, interaction summaries)
 
 ## Environment
-
-Copy `.env.example` if needed. Default uses a local SQLite file at `prisma/dev.db`.
 
 ```env
 DATABASE_URL="file:./dev.db"

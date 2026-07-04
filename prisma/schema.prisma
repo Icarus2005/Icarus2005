@@ -7,20 +7,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Lead {
+  id              String    @id @default(cuid())
+  name            String
+  company         String?
+  title           String?
+  email           String?
+  phone           String?
+  region          String    @default("UAE")
+  sector          String?
+  productInterest String?   // MAYA | METRICS_PRO | CONSULTING | OTHER
+  digitalMaturity String?   // LOW | MEDIUM | HIGH
+  source          String?
+  tags            String?
+  status          String    @default("NEW") // NEW | CONTACTED | QUALIFIED | DISQUALIFIED
+  score           Int?
+  notes           String?
+  convertedOpportunityId String?
+  activities      Activity[]
+  tasks           Task[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
 model Account {
-  id          String      @id @default(cuid())
-  name        String
-  industry    String?
-  country     String      @default("UAE")
-  sector      String      @default("PRIVATE")
-  size        String?
-  website     String?
-  description String?
-  contacts      Contact[]
-  opportunities Opportunity[]
-  activities    Activity[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  name            String
+  industry        String?
+  country         String      @default("UAE")
+  sector          String      @default("PRIVATE")
+  size            String?
+  locationsCount  Int?
+  pastEngagements String?
+  website         String?
+  description     String?
+  contacts        Contact[]
+  opportunities   Opportunity[]
+  activities      Activity[]
+  tasks           Task[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model Contact {
@@ -29,31 +55,37 @@ model Contact {
   lastName   String
   email      String?
   phone      String?
+  linkedin   String?
   title      String?
   role       String?   // DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER
   accountId  String
   account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   opportunities OpportunityContact[]
   activities    Activity[]
+  tasks         Task[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
 
 model Opportunity {
-  id                String    @id @default(cuid())
-  name              String
-  stage             String    @default("LEAD")
-  type              String    @default("DATA_PRODUCT")
-  value             Float?
-  probability       Int?
-  expectedCloseDate DateTime?
-  notes             String?
-  accountId         String
-  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  contacts          OpportunityContact[]
-  activities        Activity[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  name                 String
+  stage                String    @default("IDENTIFIED")
+  // IDENTIFIED | QUALIFIED | DEMO_SCHEDULED | PROPOSAL_SENT | NEGOTIATION | CLOSED_WON | CLOSED_LOST
+  type                 String    @default("MAYA") // MAYA | METRICS_PRO | CONSULTING | OTHER
+  value                Float?
+  probability          Int?
+  expectedCloseDate    DateTime?
+  closedAt             DateTime?
+  decisionMakerEngaged Boolean   @default(false)
+  notes                String?
+  accountId            String
+  account              Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contacts             OpportunityContact[]
+  activities           Activity[]
+  tasks                Task[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model OpportunityContact {
@@ -71,6 +103,26 @@ model Activity {
   subject       String
   notes         String?
   date          DateTime  @default(now())
+  leadId        String?
+  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  accountId     String?
+  account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  title         String
+  notes         String?
+  dueDate       DateTime?
+  status        String    @default("OPEN") // OPEN | DONE
+  leadId        String?
+  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
   accountId     String?
   account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
   contactId     String?

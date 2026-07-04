@@ -22,11 +22,11 @@ function parseValue(raw: string): number | null {
 function parseStage(priority: string, value: string): string {
   const p = priority?.trim();
   const v = value?.trim().toLowerCase();
-  if (v === "na yet" || v === "") return "LEAD";
+  if (v === "na yet" || v === "") return "IDENTIFIED";
   if (p === "1") return "NEGOTIATION";
-  if (p === "2") return "PROPOSAL";
+  if (p === "2") return "PROPOSAL_SENT";
   if (p === "3") return "QUALIFIED";
-  return "LEAD";
+  return "IDENTIFIED";
 }
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -152,11 +152,11 @@ export async function POST(req: NextRequest) {
           name: clientName,
           accountId: account.id,
           stage,
-          type: "DATA_PRODUCT",
+          type: "OTHER",
           value,
           probability:
             stage === "NEGOTIATION" ? 75
-            : stage === "PROPOSAL" ? 50
+            : stage === "PROPOSAL_SENT" ? 50
             : stage === "QUALIFIED" ? 30
             : 10,
           notes: notesParts.join("\n") || null,

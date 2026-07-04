@@ -57,6 +57,16 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
                 {contact.phone}
               </a>
             )}
+            {contact.linkedin && (
+              <a
+                href={contact.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-brand-600 hover:underline"
+              >
+                LinkedIn ↗
+              </a>
+            )}
           </div>
         </div>
         <Link href={`/contacts/${contact.id}/edit`} className="btn-secondary">Edit</Link>

@@ -1,7 +1,9 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
-  DEAL_STAGES, DEAL_STAGE_ORDER, STAGE_COLORS, DEAL_TYPES, GCC_COUNTRIES,
+  DEAL_STAGES, DEAL_STAGE_ORDER, STAGE_COLORS, DEAL_TYPES, GCC_COUNTRIES, OPEN_STAGES,
 } from "@/lib/constants";
 
 async function getOpportunities() {
@@ -36,7 +38,7 @@ export default async function OpportunitiesPage({
     {}
   );
 
-  const openStages = ["LEAD", "QUALIFIED", "PROPOSAL", "NEGOTIATION"];
+  const openStages = OPEN_STAGES;
   const pipelineValue = opportunities
     .filter((o) => openStages.includes(o.stage))
     .reduce((s, o) => s + (o.value ?? 0), 0);

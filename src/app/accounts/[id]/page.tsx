@@ -74,8 +74,16 @@ export default async function AccountDetailPage({
               </>
             )}
           </div>
+          {account.locationsCount != null && (
+            <p className="text-sm text-gray-500 mt-1">{account.locationsCount} locations</p>
+          )}
           {account.description && (
             <p className="text-sm text-gray-600 mt-2 max-w-xl">{account.description}</p>
+          )}
+          {account.pastEngagements && (
+            <p className="text-sm text-gray-500 mt-1">
+              <span className="font-medium text-gray-600">Past engagements:</span> {account.pastEngagements}
+            </p>
           )}
           {account.website && (
             <a

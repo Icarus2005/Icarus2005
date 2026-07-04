@@ -27,6 +27,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  if (body.value !== undefined) body.value = Number(body.value) || null;
+  if (body.probability !== undefined) body.probability = Number(body.probability) || null;
+  if (body.expectedCloseDate) body.expectedCloseDate = new Date(body.expectedCloseDate);
+  body.decisionMakerEngaged = body.decisionMakerEngaged === true || body.decisionMakerEngaged === "on";
+  if (["CLOSED_WON", "CLOSED_LOST"].includes(body.stage)) body.closedAt = new Date();
+
   const opportunity = await prisma.opportunity.create({
     data: body,
     include: {

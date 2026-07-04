@@ -56,8 +56,8 @@ const TEMPLATES = {
     notes: [
       "name — required",
       "accountName — must exactly match an account already in the CRM",
-      "stage — LEAD | QUALIFIED | PROPOSAL | NEGOTIATION | CLOSED_WON | CLOSED_LOST  (default: LEAD)",
-      "type — DATA_PRODUCT | CONSULTING | BOTH  (default: DATA_PRODUCT)",
+      "stage — IDENTIFIED | QUALIFIED | DEMO_SCHEDULED | PROPOSAL_SENT | NEGOTIATION | CLOSED_WON | CLOSED_LOST  (default: IDENTIFIED)",
+      "type — MAYA | METRICS_PRO | CONSULTING | OTHER  (default: OTHER)",
       "value — numeric, e.g. 50000",
       "probability — 0–100",
       "expectedCloseDate — YYYY-MM-DD",
@@ -66,8 +66,8 @@ const TEMPLATES = {
       {
         name: "Mobility Data Subscription",
         accountName: "Emaar Properties",
-        stage: "PROPOSAL",
-        type: "DATA_PRODUCT",
+        stage: "PROPOSAL_SENT",
+        type: "MAYA",
         value: "120000",
         probability: "60",
         expectedCloseDate: "2026-06-30",
@@ -124,7 +124,7 @@ function PipelineImporter() {
       header: false,
       skipEmptyLines: true,
       complete(res) {
-        const rawRows = res.data as string[][];
+        const rawRows = res.data as unknown as string[][];
         if (rawRows.length < 2) {
           setParseError("File appears empty.");
           return;

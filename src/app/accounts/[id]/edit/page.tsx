@@ -88,9 +88,20 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
             </select>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Website</label>
+            <input name="website" type="url" defaultValue={account.website ?? ""} className="input" />
+          </div>
+          <div>
+            <label className="label"># Locations</label>
+            <input name="locationsCount" type="number" min="0" defaultValue={account.locationsCount ?? ""} className="input" />
+          </div>
+        </div>
+
         <div>
-          <label className="label">Website</label>
-          <input name="website" type="url" defaultValue={account.website ?? ""} className="input" />
+          <label className="label">Past ArqOne Engagements</label>
+          <input name="pastEngagements" defaultValue={account.pastEngagements ?? ""} className="input" />
         </div>
         <div>
           <label className="label">Description</label>

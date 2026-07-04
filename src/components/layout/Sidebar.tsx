@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: "⬛" },
+  { href: "/leads", label: "Leads", icon: "🎯" },
+  { href: "/opportunities", label: "Pipeline", icon: "📊" },
   { href: "/accounts", label: "Accounts", icon: "🏢" },
   { href: "/contacts", label: "Contacts", icon: "👤" },
-  { href: "/opportunities", label: "Pipeline", icon: "📊" },
+  { href: "/tasks", label: "Tasks", icon: "✅" },
   { href: "/activities", label: "Activities", icon: "📋" },
   { href: "/import", label: "Import CSV", icon: "📥" },
 ];
@@ -21,11 +23,11 @@ export default function Sidebar() {
       <div className="px-5 py-5 border-b border-brand-900">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-            I
+            A
           </div>
-          <span className="text-white font-semibold text-sm">IRL Menat CRM</span>
+          <span className="text-white font-semibold text-sm">ArqOne CRM</span>
         </div>
-        <p className="text-brand-400 text-xs mt-0.5 ml-9">MENAT Sales</p>
+        <p className="text-brand-400 text-xs mt-0.5 ml-9">Sales Platform</p>
       </div>
 
       {/* Nav */}
@@ -54,7 +56,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-brand-900">
-        <p className="text-brand-500 text-xs">MENAT Mobility Data &amp; Consulting</p>
+        <p className="text-brand-500 text-xs">ArqOne Labs</p>
       </div>
     </aside>
   );

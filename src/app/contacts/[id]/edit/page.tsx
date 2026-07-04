@@ -100,6 +100,11 @@ export default function EditContactPage({ params }: { params: { id: string } }) 
             <input name="phone" defaultValue={contact.phone ?? ""} className="input" />
           </div>
         </div>
+
+        <div>
+          <label className="label">LinkedIn</label>
+          <input name="linkedin" type="url" defaultValue={contact.linkedin ?? ""} className="input" />
+        </div>
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? "Saving..." : "Save Changes"}

@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  if (body.locationsCount !== undefined) body.locationsCount = Number(body.locationsCount) || null;
   const account = await prisma.account.create({ data: body });
   return NextResponse.json(account, { status: 201 });
 }

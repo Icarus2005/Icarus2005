@@ -90,9 +90,20 @@ export default function NewAccountPage() {
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Website</label>
+            <input name="website" type="url" className="input" placeholder="https://example.com" />
+          </div>
+          <div>
+            <label className="label"># Locations</label>
+            <input name="locationsCount" type="number" min="0" className="input" placeholder="e.g. 12" />
+          </div>
+        </div>
+
         <div>
-          <label className="label">Website</label>
-          <input name="website" type="url" className="input" placeholder="https://example.com" />
+          <label className="label">Past ArqOne Engagements</label>
+          <input name="pastEngagements" className="input" placeholder="e.g. Footfall analytics pilot (2025)" />
         </div>
 
         <div>
