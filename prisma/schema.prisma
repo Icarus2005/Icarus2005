@@ -4,7 +4,9 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // Local dev database — no .env needed. The Supabase migration will
+  // switch this to postgresql + env("DATABASE_URL").
+  url      = "file:./dev.db"
 }
 
 model Lead {
