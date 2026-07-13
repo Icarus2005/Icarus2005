@@ -1,13 +1,12 @@
 export const COUNTRIES: Record<string, string> = {
-  UAE: "UAE",
-  SAUDI_ARABIA: "Saudi Arabia",
-  QATAR: "Qatar",
-  KUWAIT: "Kuwait",
-  BAHRAIN: "Bahrain",
-  OMAN: "Oman",
-  EGYPT: "Egypt",
-  JORDAN: "Jordan",
-  TURKEY: "Turkey",
+  AE: "United Arab Emirates (UAE)",
+  SA: "Saudi Arabia (KSA)",
+  QA: "Qatar",
+  KW: "Kuwait",
+  BH: "Bahrain",
+  OM: "Oman",
+  EG: "Egypt",
+  JO: "Jordan",
   OTHER: "Other",
 };
 
@@ -107,11 +106,12 @@ export const STAGE_COLORS: Record<string, string> = {
   CLOSED_LOST: "bg-red-100 text-red-700",
 };
 
-// ArqOne product lines (stored in Opportunity.type)
+// ArqOne product lines (stored in Opportunity.type and Lead.productInterest)
 export const DEAL_TYPES: Record<string, string> = {
-  MAYA: "MAYA",
-  METRICS_PRO: "Metrics Pro",
-  CONSULTING: "Consulting",
+  PLACEPULSE: "PlacePulse",
+  PLYMIO: "Plymio",
+  AI_NAVIGATOR: "AI Navigator",
+  ADVISORY: "ArqOne Advisory",
   OTHER: "Other",
 };
 
@@ -130,4 +130,12 @@ export const ACTIVITY_TYPES: Record<string, string> = {
 export const TASK_STATUSES: Record<string, string> = {
   OPEN: "Open",
   DONE: "Done",
+};
+
+// ─── Team & Access ──────────────────────────────────────────────────────────
+
+export const TEAM_ROLES: Record<string, string> = {
+  SALES_DIRECTOR: "Sales Director",
+  SALES_EXECUTIVE: "Sales Executive",
+  VIEWER: "Viewer (Read-only)",
 };
