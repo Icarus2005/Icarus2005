@@ -10,10 +10,15 @@ async function getOpportunities() {
   return prisma.opportunity.findMany({
     include: {
       account: { select: { id: true, name: true, country: true } },
+      owner: { select: { id: true, name: true } },
       contacts: { include: { contact: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
+}
+
+function ownerInitials(name: string) {
+  return name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
 
 function fmt(n: number) {
@@ -111,6 +116,14 @@ export default async function OpportunitiesPage({
                           <span className="text-xs font-semibold text-gray-700">{fmt(opp.value)}</span>
                         )}
                       </div>
+                      {opp.owner && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center">
+                            {ownerInitials(opp.owner.name)}
+                          </span>
+                          <span className="text-[11px] text-gray-400">{opp.owner.name}</span>
+                        </div>
+                      )}
                       {opp.probability != null && (
                         <div className="mt-2">
                           <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
@@ -155,9 +168,9 @@ export default async function OpportunitiesPage({
                 <th className="table-th">Deal Name</th>
                 <th className="table-th">Account</th>
                 <th className="table-th">Stage</th>
-                <th className="table-th">Type</th>
+                <th className="table-th">Product</th>
+                <th className="table-th">Owner</th>
                 <th className="table-th">Value</th>
-                <th className="table-th">Probability</th>
                 <th className="table-th">Close Date</th>
               </tr>
             </thead>
@@ -190,10 +203,10 @@ export default async function OpportunitiesPage({
                     </span>
                   </td>
                   <td className="table-td text-gray-500">{DEAL_TYPES[opp.type] ?? opp.type}</td>
-                  <td className="table-td font-semibold">{opp.value ? fmt(opp.value) : "—"}</td>
-                  <td className="table-td">
-                    {opp.probability != null ? `${opp.probability}%` : "—"}
+                  <td className="table-td text-gray-500">
+                    {opp.owner?.name ?? <span className="text-gray-300">Unassigned</span>}
                   </td>
+                  <td className="table-td font-semibold">{opp.value ? fmt(opp.value) : "—"}</td>
                   <td className="table-td text-gray-500">
                     {opp.expectedCloseDate
                       ? new Date(opp.expectedCloseDate).toLocaleDateString("en-GB", {

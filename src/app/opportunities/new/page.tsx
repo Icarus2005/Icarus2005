@@ -3,7 +3,8 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { DEAL_STAGES, DEAL_STAGE_ORDER, DEAL_TYPES } from "@/lib/constants";
+import { DEAL_STAGES, DEAL_STAGE_ORDER, DEAL_TYPES, COUNTRIES } from "@/lib/constants";
+import OwnerSelect from "@/components/OwnerSelect";
 
 function NewOpportunityPageForm() {
   const router = useRouter();
@@ -97,6 +98,21 @@ function NewOpportunityPageForm() {
           <div>
             <label className="label">Probability (%)</label>
             <input name="probability" type="number" min="0" max="100" className="input" placeholder="50" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Market</label>
+            <select name="markets" defaultValue="AE" className="input">
+              {Object.entries(COUNTRIES).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Owner</label>
+            <OwnerSelect />
           </div>
         </div>
 

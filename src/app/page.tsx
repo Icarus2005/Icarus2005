@@ -4,7 +4,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
   DEAL_STAGES, STAGE_COLORS, ACTIVITY_TYPES, COUNTRIES,
-  LEAD_STATUSES, LEAD_STATUS_COLORS, OPEN_STAGES,
+  LEAD_STATUSES, LEAD_STATUS_COLORS, OPEN_STAGES, DEAL_TYPES,
 } from "@/lib/constants";
 
 async function getDashboardData() {
@@ -19,7 +19,7 @@ async function getDashboardData() {
     prisma.lead.findMany({ select: { status: true, markets: true, createdAt: true } }),
     prisma.opportunity.findMany({
       where: { stage: { in: OPEN_STAGES } },
-      select: { value: true, stage: true },
+      select: { value: true, stage: true, type: true },
     }),
     prisma.opportunity.findMany({
       where: { stage: { in: ["CLOSED_WON", "CLOSED_LOST"] } },
@@ -96,6 +96,23 @@ export default async function DashboardPage() {
     verticals.set(key, entry);
   }
 
+  // Pipeline by product line
+  const PRODUCT_BAR_COLORS: Record<string, string> = {
+    PLACEPULSE: "bg-brand-500",
+    PLYMIO: "bg-emerald-500",
+    AI_NAVIGATOR: "bg-amber-500",
+    ADVISORY: "bg-violet-500",
+    OTHER: "bg-gray-400",
+  };
+  const pipelineByProduct = new Map<string, { count: number; value: number }>();
+  for (const o of data.openOpportunities) {
+    const key = o.type ?? "OTHER";
+    const entry = pipelineByProduct.get(key) ?? { count: 0, value: 0 };
+    entry.count++;
+    entry.value += o.value ?? 0;
+    pipelineByProduct.set(key, entry);
+  }
+
   // Leads by market
   const leadsByMarket = new Map<string, number>();
   for (const l of data.leads) {
@@ -164,6 +181,36 @@ export default async function DashboardPage() {
               Avg. time-to-close (won deals): <span className="font-semibold text-gray-700">{avgDaysToClose} days</span>
             </p>
           )}
+
+          {/* Pipeline by Product */}
+          <h2 className="text-sm font-semibold text-gray-700 mt-6 mb-3 pt-4 border-t border-gray-100">Pipeline by Product</h2>
+          {pipelineByProduct.size === 0 && <p className="text-sm text-gray-400">No open deals yet</p>}
+          <div className="space-y-2.5">
+            {Object.keys(DEAL_TYPES)
+              .filter((k) => pipelineByProduct.has(k))
+              .map((k) => {
+                const { count, value } = pipelineByProduct.get(k)!;
+                const pct = pipelineValue > 0 ? (value / pipelineValue) * 100 : 0;
+                return (
+                  <div key={k}>
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${PRODUCT_BAR_COLORS[k] ?? "bg-gray-400"}`} />
+                        <span className="text-sm text-gray-700 font-medium">{DEAL_TYPES[k]}</span>
+                        <span className="text-xs text-gray-400">{count} deal{count !== 1 ? "s" : ""}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-700">{fmt(value)}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${PRODUCT_BAR_COLORS[k] ?? "bg-gray-400"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
 
         {/* Leads panel */}

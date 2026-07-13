@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DEAL_STAGES, DEAL_STAGE_ORDER, DEAL_TYPES } from "@/lib/constants";
+import { DEAL_STAGES, DEAL_STAGE_ORDER, DEAL_TYPES, COUNTRIES } from "@/lib/constants";
+import OwnerSelect from "@/components/OwnerSelect";
 
 export default function EditOpportunityPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -25,6 +26,8 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
     );
     if (body.value) body.value = Number(body.value);
     if (body.probability) body.probability = Number(body.probability);
+    // Allow clearing the owner back to Unassigned
+    body.ownerId = data.ownerId || null;
     const res = await fetch(`/api/opportunities/${params.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -87,6 +90,20 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
           <div>
             <label className="label">Probability (%)</label>
             <input name="probability" type="number" min="0" max="100" defaultValue={String(opp.probability ?? "")} className="input" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Market</label>
+            <select name="markets" defaultValue={String(opp.markets ?? "AE")} className="input">
+              {Object.entries(COUNTRIES).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Owner</label>
+            <OwnerSelect defaultValue={opp.ownerId ? String(opp.ownerId) : null} />
           </div>
         </div>
         <div>

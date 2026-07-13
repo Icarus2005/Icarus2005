@@ -51,7 +51,7 @@ model Account {
   id              String      @id @default(cuid())
   name            String
   industry        String?
-  country         String      @default("UAE")
+  country         String      @default("AE")
   sector          String      @default("PRIVATE")
   size            String?
   locationsCount  Int?

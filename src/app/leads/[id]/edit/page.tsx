@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   COUNTRIES, PRODUCTS, DIGITAL_MATURITY, LEAD_SOURCES, LEAD_STATUSES,
 } from "@/lib/constants";
+import OwnerSelect from "@/components/OwnerSelect";
 
 export default function EditLeadPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -22,7 +23,11 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
     setSaving(true);
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
-    const body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ""));
+    const body: Record<string, unknown> = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== "")
+    );
+    // Allow clearing the owner back to Unassigned
+    body.ownerId = data.ownerId || null;
     const res = await fetch(`/api/leads/${params.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -140,6 +145,13 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
           <div>
             <label className="label">Tags</label>
             <input name="tags" defaultValue={lead.tags ?? ""} className="input" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Owner</label>
+            <OwnerSelect defaultValue={lead.ownerId} />
           </div>
         </div>
 

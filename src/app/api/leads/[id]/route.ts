@@ -8,6 +8,7 @@ export async function GET(
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
     include: {
+      owner: { select: { id: true, name: true } },
       activities: { orderBy: { date: "desc" }, take: 20 },
       tasks: { orderBy: { dueDate: "asc" } },
     },

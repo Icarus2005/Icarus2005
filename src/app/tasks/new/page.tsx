@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import OwnerSelect from "@/components/OwnerSelect";
 
 function NewTaskPageForm() {
   const router = useRouter();
@@ -67,9 +68,15 @@ function NewTaskPageForm() {
           <input name="title" required className="input" placeholder="e.g. Follow up with Omar on proposal" />
         </div>
 
-        <div>
-          <label className="label">Due Date</label>
-          <input name="dueDate" type="date" className="input" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Due Date</label>
+            <input name="dueDate" type="date" className="input" />
+          </div>
+          <div>
+            <label className="label">Assigned To</label>
+            <OwnerSelect />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

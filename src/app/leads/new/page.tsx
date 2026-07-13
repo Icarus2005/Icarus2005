@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   COUNTRIES, PRODUCTS, DIGITAL_MATURITY, LEAD_SOURCES, LEAD_STATUSES,
 } from "@/lib/constants";
+import OwnerSelect from "@/components/OwnerSelect";
 
 export default function NewLeadPage() {
   const router = useRouter();
@@ -134,6 +135,13 @@ export default function NewLeadPage() {
           <div>
             <label className="label">Tags</label>
             <input name="tags" className="input" placeholder="GITEX, priority" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Owner</label>
+            <OwnerSelect />
           </div>
         </div>
 

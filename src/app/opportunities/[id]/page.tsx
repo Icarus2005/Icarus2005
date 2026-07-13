@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  DEAL_STAGES, STAGE_COLORS, DEAL_TYPES, CONTACT_ROLES, ACTIVITY_TYPES,
+  DEAL_STAGES, STAGE_COLORS, DEAL_TYPES, CONTACT_ROLES, ACTIVITY_TYPES, COUNTRIES,
 } from "@/lib/constants";
 
 async function getOpportunity(id: string) {
@@ -10,6 +10,7 @@ async function getOpportunity(id: string) {
     where: { id },
     include: {
       account: true,
+      owner: { select: { id: true, name: true } },
       contacts: { include: { contact: true } },
       activities: {
         include: { contact: true },
@@ -49,6 +50,8 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               {DEAL_STAGES[opp.stage] ?? opp.stage}
             </span>
             <span className="text-sm text-gray-500">{DEAL_TYPES[opp.type] ?? opp.type}</span>
+            <span className="text-sm text-gray-400">· {COUNTRIES[opp.markets] ?? opp.markets}</span>
+            {opp.owner && <span className="text-sm text-gray-400">· Owned by {opp.owner.name}</span>}
           </div>
           {opp.notes && (
             <p className="text-sm text-gray-600 mt-2 max-w-xl">{opp.notes}</p>

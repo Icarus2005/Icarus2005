@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
-  COUNTRIES, LEAD_STATUSES, LEAD_STATUS_COLORS, PRODUCTS, LEAD_SOURCES,
+  COUNTRIES, LEAD_STATUSES, LEAD_STATUS_COLORS, PRODUCTS,
 } from "@/lib/constants";
 
 async function getLeads(search: string, status: string, markets: string) {
@@ -22,6 +22,7 @@ async function getLeads(search: string, status: string, markets: string) {
         markets ? { markets: { contains: markets } } : {},
       ],
     },
+    include: { owner: { select: { id: true, name: true } } },
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],
   });
 }
@@ -95,9 +96,9 @@ export default async function LeadsPage({
             <tr>
               <th className="table-th">Lead</th>
               <th className="table-th">Company</th>
-              <th className="table-th">Region</th>
+              <th className="table-th">Market</th>
               <th className="table-th">Product Interest</th>
-              <th className="table-th">Source</th>
+              <th className="table-th">Owner</th>
               <th className="table-th text-center">Score</th>
               <th className="table-th">Status</th>
             </tr>
@@ -125,7 +126,7 @@ export default async function LeadsPage({
                   {lead.productInterest ? (PRODUCTS[lead.productInterest] ?? lead.productInterest) : "—"}
                 </td>
                 <td className="table-td text-gray-500">
-                  {lead.source ? (LEAD_SOURCES[lead.source] ?? lead.source) : "—"}
+                  {lead.owner?.name ?? <span className="text-gray-300">Unassigned</span>}
                 </td>
                 <td className="table-td text-center"><ScoreBadge score={lead.score} /></td>
                 <td className="table-td">

@@ -11,6 +11,7 @@ async function getLead(id: string) {
   return prisma.lead.findUnique({
     where: { id },
     include: {
+      owner: { select: { id: true, name: true } },
       activities: { orderBy: { date: "desc" }, take: 20 },
       tasks: { orderBy: { dueDate: "asc" } },
     },
@@ -98,8 +99,9 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           </p>
         </div>
         <div className="card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tags</p>
-          <p className="text-sm text-gray-700 mt-2">{lead.tags ?? "—"}</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</p>
+          <p className="text-lg font-bold text-gray-800 mt-1">{lead.owner?.name ?? "Unassigned"}</p>
+          {lead.tags && <p className="text-xs text-gray-400 mt-1">Tags: {lead.tags}</p>}
         </div>
       </div>
 

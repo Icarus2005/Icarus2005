@@ -3,12 +3,29 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Team
+  const founder = await prisma.teamMember.create({
+    data: {
+      name: "Piero Saleme",
+      email: "pierosaleme@gmail.com",
+      role: "SALES_DIRECTOR",
+    },
+  });
+
+  const exec = await prisma.teamMember.create({
+    data: {
+      name: "Sara Haddad",
+      email: "sara@arqonelabs.com",
+      role: "SALES_EXECUTIVE",
+    },
+  });
+
   // Accounts
   const emaar = await prisma.account.create({
     data: {
       name: "Emaar Malls",
       industry: "Retail",
-      country: "UAE",
+      country: "AE",
       sector: "PRIVATE",
       size: "ENTERPRISE",
       locationsCount: 12,
@@ -22,7 +39,7 @@ async function main() {
     data: {
       name: "Saudi Tourism Authority",
       industry: "Tourism",
-      country: "SAUDI_ARABIA",
+      country: "SA",
       sector: "GOVERNMENT",
       size: "ENTERPRISE",
       description: "National tourism body, KSA",
@@ -56,27 +73,31 @@ async function main() {
   // Opportunities
   const opp1 = await prisma.opportunity.create({
     data: {
-      name: "MAYA Deployment - Dubai Malls",
+      name: "PlacePulse Deployment - Dubai Malls",
       stage: "PROPOSAL_SENT",
-      type: "MAYA",
+      type: "PLACEPULSE",
       value: 180000,
       probability: 55,
+      markets: "AE",
       decisionMakerEngaged: true,
       expectedCloseDate: new Date("2026-09-30"),
       accountId: emaar.id,
-      notes: "MAYA rollout across 3 flagship malls. Proposal v2 sent.",
+      ownerId: founder.id,
+      notes: "PlacePulse rollout across 3 flagship malls. Proposal v2 sent.",
     },
   });
 
   const opp2 = await prisma.opportunity.create({
     data: {
-      name: "Metrics Pro - Tourism Dashboards",
+      name: "Plymio - Tourism Dashboards",
       stage: "DEMO_SCHEDULED",
-      type: "METRICS_PRO",
+      type: "PLYMIO",
       value: 95000,
       probability: 40,
+      markets: "SA",
       expectedCloseDate: new Date("2026-10-15"),
       accountId: stcGroup.id,
+      ownerId: exec.id,
       notes: "Demo scheduled with digital team.",
     },
   });
@@ -96,35 +117,37 @@ async function main() {
         company: "Alshaya Group",
         title: "VP Retail Tech",
         email: "omar.n@alshaya.com",
-        region: "KUWAIT",
+        markets: "KW,SA",
         sector: "Retail",
-        productInterest: "MAYA",
+        productInterest: "PLACEPULSE",
         digitalMaturity: "HIGH",
         source: "EVENT",
         tags: "GITEX, priority",
         status: "CONTACTED",
         score: 78,
-        notes: "Met at GITEX. Interested in MAYA for flagship stores.",
+        ownerId: founder.id,
+        notes: "Met at GITEX. Interested in PlacePulse for flagship stores.",
       },
       {
         name: "Sara Aziz",
         company: "Jeddah Season",
         title: "Events Director",
-        region: "SAUDI_ARABIA",
+        markets: "SA",
         sector: "Entertainment",
-        productInterest: "METRICS_PRO",
+        productInterest: "PLYMIO",
         digitalMaturity: "MEDIUM",
         source: "REFERRAL",
         status: "NEW",
         score: 55,
+        ownerId: exec.id,
       },
       {
         name: "Karim Fares",
         company: "Spinneys",
         title: "Head of Operations",
-        region: "UAE",
+        markets: "AE",
         sector: "F&B",
-        productInterest: "CONSULTING",
+        productInterest: "ADVISORY",
         digitalMaturity: "LOW",
         source: "OUTBOUND",
         status: "NEW",
@@ -164,16 +187,19 @@ async function main() {
         dueDate: new Date("2026-07-08"),
         opportunityId: opp1.id,
         accountId: emaar.id,
+        ownerId: founder.id,
       },
       {
-        title: "Prepare Metrics Pro demo environment",
+        title: "Prepare Plymio demo environment",
         dueDate: new Date("2026-07-10"),
         opportunityId: opp2.id,
         accountId: stcGroup.id,
+        ownerId: exec.id,
       },
       {
         title: "Follow up with Omar Nasser (Alshaya)",
         dueDate: new Date("2026-07-05"),
+        ownerId: founder.id,
       },
     ],
   });
