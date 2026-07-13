@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
-  const region = searchParams.get("region") ?? "";
+  const markets = searchParams.get("markets") ?? "";
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
             }
           : {},
         status ? { status } : {},
-        region ? { region } : {},
+        markets ? { markets: { contains: markets } } : {},
       ],
     },
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],

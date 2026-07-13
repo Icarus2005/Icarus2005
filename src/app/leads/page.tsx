@@ -6,7 +6,7 @@ import {
   COUNTRIES, LEAD_STATUSES, LEAD_STATUS_COLORS, PRODUCTS, LEAD_SOURCES,
 } from "@/lib/constants";
 
-async function getLeads(search: string, status: string, region: string) {
+async function getLeads(search: string, status: string, markets: string) {
   return prisma.lead.findMany({
     where: {
       AND: [
@@ -19,7 +19,7 @@ async function getLeads(search: string, status: string, region: string) {
             }
           : {},
         status ? { status } : {},
-        region ? { region } : {},
+        markets ? { markets: { contains: markets } } : {},
       ],
     },
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],
@@ -38,12 +38,12 @@ function ScoreBadge({ score }: { score: number | null }) {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { search?: string; status?: string; region?: string };
+  searchParams: { search?: string; status?: string; markets?: string };
 }) {
   const search = searchParams.search ?? "";
   const status = searchParams.status ?? "";
-  const region = searchParams.region ?? "";
-  const leads = await getLeads(search, status, region);
+  const markets = searchParams.markets ?? "";
+  const leads = await getLeads(search, status, markets);
 
   return (
     <div className="p-8">
@@ -74,18 +74,18 @@ export default async function LeadsPage({
         ))}
       </div>
 
-      {/* Search + region */}
+      {/* Search + markets */}
       <form method="GET" className="flex gap-3 mb-6 flex-wrap">
         {status && <input type="hidden" name="status" value={status} />}
         <input name="search" defaultValue={search} placeholder="Search leads..." className="input w-56" />
-        <select name="region" defaultValue={region} className="input w-40">
-          <option value="">All Regions</option>
+        <select name="markets" defaultValue={markets} className="input w-40">
+          <option value="">All Markets</option>
           {Object.entries(COUNTRIES).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
         <button type="submit" className="btn-secondary">Filter</button>
-        {(search || region) && <Link href={status ? `/leads?status=${status}` : "/leads"} className="btn-secondary">Clear</Link>}
+        {(search || markets) && <Link href={status ? `/leads?status=${status}` : "/leads"} className="btn-secondary">Clear</Link>}
       </form>
 
       {/* Table */}
@@ -120,7 +120,7 @@ export default async function LeadsPage({
                   {lead.title && <p className="text-xs text-gray-400">{lead.title}</p>}
                 </td>
                 <td className="table-td text-gray-600">{lead.company ?? "—"}</td>
-                <td className="table-td text-gray-500">{COUNTRIES[lead.region] ?? lead.region}</td>
+                <td className="table-td text-gray-500">{COUNTRIES[lead.markets] ?? lead.markets}</td>
                 <td className="table-td text-gray-500">
                   {lead.productInterest ? (PRODUCTS[lead.productInterest] ?? lead.productInterest) : "—"}
                 </td>

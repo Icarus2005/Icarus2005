@@ -50,7 +50,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               </>
             )}
             <span className="text-gray-300">·</span>
-            <span>{COUNTRIES[lead.region] ?? lead.region}</span>
+            <span>{COUNTRIES[lead.markets] ?? lead.markets}</span>
             {lead.sector && (
               <>
                 <span className="text-gray-300">·</span>

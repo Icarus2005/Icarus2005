@@ -27,7 +27,7 @@ export async function POST(
     account = await prisma.account.create({
       data: {
         name: companyName,
-        country: lead.region,
+        country: lead.markets,
         industry: lead.sector || null,
         description: lead.notes || null,
       },
@@ -78,10 +78,11 @@ export async function POST(
   });
 }
 
-const VALID_TYPES = ["MAYA", "METRICS_PRO", "CONSULTING", "OTHER"];
+const VALID_TYPES = ["PLACEPULSE", "PLYMIO", "AI_NAVIGATOR", "ADVISORY", "OTHER"];
 const TYPE_LABELS: Record<string, string> = {
-  MAYA: "MAYA",
-  METRICS_PRO: "Metrics Pro",
-  CONSULTING: "Consulting",
+  PLACEPULSE: "PlacePulse",
+  PLYMIO: "Plymio",
+  AI_NAVIGATOR: "AI Navigator",
+  ADVISORY: "ArqOne Advisory",
   OTHER: "New Opportunity",
 };

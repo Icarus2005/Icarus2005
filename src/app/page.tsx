@@ -16,7 +16,7 @@ async function getDashboardData() {
     pipelineByStage,
     openTasks,
   ] = await Promise.all([
-    prisma.lead.findMany({ select: { status: true, region: true, createdAt: true } }),
+    prisma.lead.findMany({ select: { status: true, markets: true, createdAt: true } }),
     prisma.opportunity.findMany({
       where: { stage: { in: OPEN_STAGES } },
       select: { value: true, stage: true },
@@ -96,11 +96,11 @@ export default async function DashboardPage() {
     verticals.set(key, entry);
   }
 
-  // Leads by region
-  const leadsByRegion = new Map<string, number>();
+  // Leads by market
+  const leadsByMarket = new Map<string, number>();
   for (const l of data.leads) {
     if (l.status === "DISQUALIFIED") continue;
-    leadsByRegion.set(l.region, (leadsByRegion.get(l.region) ?? 0) + 1);
+    leadsByMarket.set(l.markets, (leadsByMarket.get(l.markets) ?? 0) + 1);
   }
 
   // Leads by status
@@ -180,17 +180,17 @@ export default async function DashboardPage() {
               </div>
             ))}
           </div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Region</h3>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By Market</h3>
           <div className="space-y-1.5">
-            {Array.from(leadsByRegion.entries())
+            {Array.from(leadsByMarket.entries())
               .sort((a, b) => b[1] - a[1])
-              .map(([region, count]) => (
-                <div key={region} className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{COUNTRIES[region] ?? region}</span>
+              .map(([market, count]) => (
+                <div key={market} className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{COUNTRIES[market] ?? market}</span>
                   <span className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-full">{count}</span>
                 </div>
               ))}
-            {leadsByRegion.size === 0 && <p className="text-sm text-gray-400">No leads yet</p>}
+            {leadsByMarket.size === 0 && <p className="text-sm text-gray-400">No leads yet</p>}
           </div>
         </div>
 

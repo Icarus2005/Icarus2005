@@ -67,8 +67,8 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
             <input name="title" defaultValue={lead.title ?? ""} className="input" />
           </div>
           <div>
-            <label className="label">Region</label>
-            <select name="region" defaultValue={lead.region} className="input">
+            <label className="label">Market</label>
+            <select name="markets" defaultValue={lead.markets} className="input">
               {Object.entries(COUNTRIES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}

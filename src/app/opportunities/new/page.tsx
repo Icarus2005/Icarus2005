@@ -81,7 +81,7 @@ function NewOpportunityPageForm() {
           </div>
           <div>
             <label className="label">Product</label>
-            <select name="type" defaultValue="MAYA" className="input">
+            <select name="type" defaultValue="PLACEPULSE" className="input">
               {Object.entries(DEAL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}

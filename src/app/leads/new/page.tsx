@@ -61,8 +61,8 @@ export default function NewLeadPage() {
             <input name="title" className="input" placeholder="VP Retail Tech" />
           </div>
           <div>
-            <label className="label">Region</label>
-            <select name="region" defaultValue="UAE" className="input">
+            <label className="label">Market</label>
+            <select name="markets" defaultValue="AE" className="input">
               {Object.entries(COUNTRIES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}

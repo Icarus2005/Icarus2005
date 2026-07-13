@@ -72,7 +72,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
           </div>
           <div>
             <label className="label">Product</label>
-            <select name="type" defaultValue={String(opp.type ?? "MAYA")} className="input">
+            <select name="type" defaultValue={String(opp.type ?? "PLACEPULSE")} className="input">
               {Object.entries(DEAL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}

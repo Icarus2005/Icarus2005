@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const accountMap = new Map(accounts.map((a) => [a.name.toLowerCase().trim(), a.id]));
 
   const VALID_STAGES = ["IDENTIFIED", "QUALIFIED", "DEMO_SCHEDULED", "PROPOSAL_SENT", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"];
-  const VALID_TYPES = ["MAYA", "METRICS_PRO", "CONSULTING", "OTHER"];
+  const VALID_TYPES = ["PLACEPULSE", "PLYMIO", "AI_NAVIGATOR", "ADVISORY", "OTHER"];
 
   const results = { created: 0, skipped: 0, errors: [] as string[] };
 
