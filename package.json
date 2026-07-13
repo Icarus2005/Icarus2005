@@ -8,9 +8,11 @@
     "start": "next start",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:reset": "rm -f prisma/dev.db prisma/dev.db-journal && prisma migrate deploy && tsx prisma/seed.ts"
   },
   "dependencies": {
+    "lucide-react": "^1.24.0",
     "next": "14.2.3",
     "papaparse": "^5.4.1",
     "react": "^18",
@@ -23,6 +25,9 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.3",
+    "playwright": "^1.61.1",
     "postcss": "^8",
     "prisma": "^5.14.0",
     "tailwindcss": "^3.4.1",

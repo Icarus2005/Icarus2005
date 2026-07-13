@@ -6,106 +6,185 @@ datasource db {
   provider = "sqlite"
   // Local dev database — no .env needed. The Supabase migration will
   // switch this to postgresql + env("DATABASE_URL").
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
-model TeamMember {
-  id            String    @id @default(cuid())
+// ─── Product catalog & pipelines ─────────────────────────────────────────────
+
+model Product {
+  key          String     @id // PLACEPULSE | PLYMIO | AI_NAVIGATOR | ADVISORY | UNASSIGNED
+  name         String
+  description  String?
+  active       Boolean    @default(true)
+  displayOrder Int        @default(0)
+  pipelines    Pipeline[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Pipeline {
+  id            String          @id // deterministic: pl_<product-key-lower>
   name          String
-  email         String    @unique
-  role          String    @default("SALES_EXECUTIVE")
-  active        Boolean   @default(true)
+  productKey    String
+  product       Product         @relation(fields: [productKey], references: [key])
+  isDefault     Boolean         @default(true)
+  active        Boolean         @default(true)
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([productKey])
+}
+
+model PipelineStage {
+  id                 String        @id // deterministic: st_<pipeline>_<stage-key-lower>
+  key                String // IDENTIFIED | QUALIFIED | ...
+  name               String
+  order              Int
+  defaultProbability Int           @default(10)
+  isWon              Boolean       @default(false)
+  isLost             Boolean       @default(false)
+  active             Boolean       @default(true)
+  pipelineId         String
+  pipeline           Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities      Opportunity[]
+
+  @@unique([pipelineId, key])
+  @@index([pipelineId, order])
+}
+
+// ─── Team ────────────────────────────────────────────────────────────────────
+
+model TeamMember {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  role          String        @default("SALES_EXECUTIVE") // SALES_DIRECTOR | SALES_EXECUTIVE | VIEWER
+  active        Boolean       @default(true)
   leads         Lead[]
   opportunities Opportunity[]
   tasks         Task[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  activities    Activity[]
+  accounts      Account[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
+// ─── Core records ────────────────────────────────────────────────────────────
+
 model Lead {
-  id              String    @id @default(cuid())
-  name            String
-  company         String?
-  title           String?
-  email           String?
-  phone           String?
-  markets         String    @default("AE")
-  sector          String?
-  productInterest String?   // PLACEPULSE | PLYMIO | AI_NAVIGATOR | ADVISORY | OTHER
-  digitalMaturity String?   // LOW | MEDIUM | HIGH
-  source          String?
-  tags            String?
-  status          String    @default("NEW") // NEW | CONTACTED | QUALIFIED | DISQUALIFIED
-  score           Int?
-  notes           String?
+  id                     String      @id @default(cuid())
+  name                   String
+  company                String?
+  title                  String?
+  email                  String?
+  phone                  String?
+  markets                String      @default("AE") // comma-separated market codes
+  sector                 String?
+  primaryProduct         String      @default("UNASSIGNED") // canonical product key
+  secondaryProducts      String? // comma-separated product keys (cross-sell interest)
+  digitalMaturity        String? // LOW | MEDIUM | HIGH
+  source                 String?
+  salesMotion            String? // DIRECT | PARTNER | REFERRAL | INVESTOR | INBOUND | OUTBOUND | EVENT | EXISTING_RELATIONSHIP | OTHER
+  tags                   String?
+  status                 String      @default("NEW") // NEW | CONTACTED | QUALIFIED | DISQUALIFIED
+  score                  Int?
+  estimatedValue         Float?
+  nextAction             String?
+  nextActionDate         DateTime?
+  lastActivityAt         DateTime?
+  notes                  String?
   convertedOpportunityId String?
-  ownerId         String?
-  owner           TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  activities      Activity[]
-  tasks           Task[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  ownerId                String?
+  owner                  TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  activities             Activity[]
+  tasks                  Task[]
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  @@index([primaryProduct])
+  @@index([status])
+  @@index([ownerId])
 }
 
 model Account {
-  id              String      @id @default(cuid())
-  name            String
+  id              String        @id @default(cuid())
+  name            String        @unique
   industry        String?
-  country         String      @default("AE")
-  sector          String      @default("PRIVATE")
+  country         String        @default("AE")
+  sector          String        @default("PRIVATE")
   size            String?
+  tier            String? // STRATEGIC | KEY | STANDARD
   locationsCount  Int?
   pastEngagements String?
   website         String?
   description     String?
+  ownerId         String?
+  owner           TeamMember?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   contacts        Contact[]
   opportunities   Opportunity[]
   activities      Activity[]
   tasks           Task[]
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([ownerId])
 }
 
 model Contact {
-  id         String    @id @default(cuid())
-  firstName  String
-  lastName   String
-  email      String?
-  phone      String?
-  linkedin   String?
-  title      String?
-  role       String?   // DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER
-  accountId  String
-  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id            String               @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String?              @unique
+  phone         String?
+  linkedin      String?
+  title         String?
+  role          String? // DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER
+  accountId     String
+  account       Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   opportunities OpportunityContact[]
   activities    Activity[]
   tasks         Task[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 }
 
 model Opportunity {
-  id                   String    @id @default(cuid())
+  id                   String               @id @default(cuid())
   name                 String
-  stage                String    @default("IDENTIFIED")
-  // IDENTIFIED | QUALIFIED | DEMO_SCHEDULED | PROPOSAL_SENT | NEGOTIATION | CLOSED_WON | CLOSED_LOST
-  type                 String    @default("PLACEPULSE") // PLACEPULSE | PLYMIO | AI_NAVIGATOR | ADVISORY | OTHER
+  product              String               @default("UNASSIGNED") // canonical product key — exactly one per opportunity
+  pipelineId           String?
+  pipeline             Pipeline?            @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stageId              String?
+  stageRef             PipelineStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  stage                String               @default("IDENTIFIED") // stage key (kept in sync with stageRef)
+  stageChangedAt       DateTime             @default(now())
   value                Float?
   probability          Int?
-  markets              String    @default("AE")
+  markets              String               @default("AE")
+  forecastCategory     String               @default("PIPELINE") // PIPELINE | BEST_CASE | COMMIT | CLOSED
+  healthStatus         String               @default("ON_TRACK") // ON_TRACK | AT_RISK | STALLED
+  nextAction           String?
+  nextActionDate       DateTime?
   expectedCloseDate    DateTime?
   closedAt             DateTime?
-  decisionMakerEngaged Boolean   @default(false)
+  decisionMakerEngaged Boolean              @default(false)
   notes                String?
   ownerId              String?
-  owner                TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  owner                TeamMember?          @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   accountId            String
-  account              Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account              Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   contacts             OpportunityContact[]
   activities           Activity[]
   tasks                Task[]
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([product])
+  @@index([stageId])
+  @@index([ownerId])
+  @@index([accountId])
 }
 
 model OpportunityContact {
@@ -118,39 +197,51 @@ model OpportunityContact {
 }
 
 model Activity {
-  id            String    @id @default(cuid())
-  type          String    // MEETING | CALL | EMAIL | NOTE | DEMO
+  id            String       @id @default(cuid())
+  type          String // MEETING | CALL | EMAIL | NOTE | DEMO
   subject       String
   notes         String?
-  date          DateTime  @default(now())
+  date          DateTime     @default(now())
+  product       String? // explicit product when only account/contact context exists
+  ownerId       String?
+  owner         TeamMember?  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   leadId        String?
-  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead          Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   accountId     String?
-  account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account       Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   opportunityId String?
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([product])
+  @@index([date])
 }
 
 model Task {
-  id            String    @id @default(cuid())
+  id            String       @id @default(cuid())
   title         String
   notes         String?
   dueDate       DateTime?
-  status        String    @default("OPEN") // OPEN | DONE
+  status        String       @default("OPEN") // OPEN | DONE
+  priority      String       @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  product       String? // explicit product when only account/contact context exists
   leadId        String?
-  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead          Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   accountId     String?
-  account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account       Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   opportunityId String?
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   ownerId       String?
-  owner         TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  owner         TeamMember?  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([product])
+  @@index([status])
+  @@index([dueDate])
 }

@@ -1,25 +1,45 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { Plus, Inbox } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import {
-  COUNTRIES, LEAD_STATUSES, LEAD_STATUS_COLORS, PRODUCTS,
-} from "@/lib/constants";
+import { COUNTRIES, LEAD_STATUSES, LEAD_SOURCES } from "@/lib/constants";
+import { SALES_MOTIONS, parseProductParam, PRODUCTS_META } from "@/lib/products";
+import { leadProductWhere } from "@/lib/filters";
+import ProductSelector from "@/components/ProductSelector";
+import LeadsTable, { type LeadRow } from "./LeadsTable";
 
-async function getLeads(search: string, status: string, markets: string) {
+type SearchParams = {
+  search?: string;
+  status?: string;
+  markets?: string;
+  product?: string;
+  ownerId?: string;
+  motion?: string;
+  source?: string;
+  view?: string;
+};
+
+async function getLeads(sp: SearchParams) {
+  const product = parseProductParam(sp.product);
   return prisma.lead.findMany({
     where: {
       AND: [
-        search
+        sp.search
           ? {
               OR: [
-                { name: { contains: search } },
-                { company: { contains: search } },
+                { name: { contains: sp.search } },
+                { company: { contains: sp.search } },
               ],
             }
           : {},
-        status ? { status } : {},
-        markets ? { markets: { contains: markets } } : {},
+        sp.status ? { status: sp.status } : {},
+        sp.markets ? { markets: { contains: sp.markets } } : {},
+        leadProductWhere(product ?? ""),
+        sp.ownerId ? { ownerId: sp.ownerId } : {},
+        sp.motion ? { salesMotion: sp.motion } : {},
+        sp.source ? { source: sp.source } : {},
+        sp.view === "overdue" ? { nextActionDate: { lt: new Date() }, status: { not: "DISQUALIFIED" } } : {},
       ],
     },
     include: { owner: { select: { id: true, name: true } } },
@@ -27,39 +47,58 @@ async function getLeads(search: string, status: string, markets: string) {
   });
 }
 
-function ScoreBadge({ score }: { score: number | null }) {
-  if (score == null) return <span className="text-gray-300">—</span>;
-  const color =
-    score >= 70 ? "bg-green-100 text-green-700"
-    : score >= 40 ? "bg-yellow-100 text-yellow-700"
-    : "bg-gray-100 text-gray-500";
-  return <span className={`badge ${color}`}>{score}</span>;
-}
+export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
+  const product = parseProductParam(searchParams.product);
+  const [leads, owners, unassignedCount] = await Promise.all([
+    getLeads(searchParams),
+    prisma.teamMember.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.lead.count({ where: { primaryProduct: "UNASSIGNED", status: { not: "DISQUALIFIED" } } }),
+  ]);
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams: { search?: string; status?: string; markets?: string };
-}) {
-  const search = searchParams.search ?? "";
   const status = searchParams.status ?? "";
-  const markets = searchParams.markets ?? "";
-  const leads = await getLeads(search, status, markets);
+
+  const statusQS = (s: string) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...searchParams, status: s || undefined })) {
+      if (v && k !== "view") params.set(k, v);
+    }
+    const str = params.toString();
+    return str ? `?${str}` : "";
+  };
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {product ? `${PRODUCTS_META[product].label} Leads` : "Leads"}
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">{leads.length} leads</p>
         </div>
-        <Link href="/leads/new" className="btn-primary">+ New Lead</Link>
+        <div className="flex items-center gap-2">
+          {unassignedCount > 0 && product !== "UNASSIGNED" && (
+            <Link
+              href="/leads?product=UNASSIGNED"
+              className="btn-secondary border-amber-200 text-amber-700 hover:bg-amber-50"
+            >
+              <Inbox size={15} aria-hidden /> Unassigned queue ({unassignedCount})
+            </Link>
+          )}
+          <Link href={`/leads/new${product ? `?product=${product}` : ""}`} className="btn-primary">
+            <Plus size={16} aria-hidden /> New Lead
+          </Link>
+        </div>
+      </div>
+
+      {/* Product selector */}
+      <div className="mb-4">
+        <ProductSelector />
       </div>
 
       {/* Status quick filters */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <Link
-          href="/leads"
+          href={`/leads${statusQS("")}`}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!status ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
         >
           All
@@ -67,78 +106,69 @@ export default async function LeadsPage({
         {Object.entries(LEAD_STATUSES).map(([k, v]) => (
           <Link
             key={k}
-            href={`/leads?status=${k}`}
+            href={`/leads${statusQS(k)}`}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${status === k ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
             {v}
           </Link>
         ))}
+        <Link
+          href={`/leads?${new URLSearchParams({ ...(product ? { product } : {}), view: "overdue" }).toString()}`}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${searchParams.view === "overdue" ? "bg-red-600 text-white" : "bg-white border border-red-200 text-red-600 hover:bg-red-50"}`}
+        >
+          Overdue actions
+        </Link>
       </div>
 
-      {/* Search + markets */}
+      {/* Filter toolbar */}
       <form method="GET" className="flex gap-3 mb-6 flex-wrap">
+        {product && <input type="hidden" name="product" value={product} />}
         {status && <input type="hidden" name="status" value={status} />}
-        <input name="search" defaultValue={search} placeholder="Search leads..." className="input w-56" />
-        <select name="markets" defaultValue={markets} className="input w-40">
+        <input
+          name="search"
+          defaultValue={searchParams.search ?? ""}
+          placeholder="Search leads…"
+          aria-label="Search leads"
+          className="input w-52"
+        />
+        <label className="sr-only" htmlFor="lead-owner">Owner</label>
+        <select id="lead-owner" name="ownerId" defaultValue={searchParams.ownerId ?? ""} className="input w-40">
+          <option value="">All Owners</option>
+          {owners.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <label className="sr-only" htmlFor="lead-market">Market</label>
+        <select id="lead-market" name="markets" defaultValue={searchParams.markets ?? ""} className="input w-40">
           <option value="">All Markets</option>
           {Object.entries(COUNTRIES).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <label className="sr-only" htmlFor="lead-motion">Sales motion</label>
+        <select id="lead-motion" name="motion" defaultValue={searchParams.motion ?? ""} className="input w-40">
+          <option value="">All Motions</option>
+          {Object.entries(SALES_MOTIONS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <label className="sr-only" htmlFor="lead-source">Source</label>
+        <select id="lead-source" name="source" defaultValue={searchParams.source ?? ""} className="input w-40">
+          <option value="">All Sources</option>
+          {Object.entries(LEAD_SOURCES).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
         <button type="submit" className="btn-secondary">Filter</button>
-        {(search || markets) && <Link href={status ? `/leads?status=${status}` : "/leads"} className="btn-secondary">Clear</Link>}
+        {(searchParams.search || searchParams.ownerId || searchParams.markets || searchParams.motion || searchParams.source) && (
+          <Link href={`/leads${product ? `?product=${product}` : ""}`} className="btn-secondary">Clear</Link>
+        )}
       </form>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="table-th">Lead</th>
-              <th className="table-th">Company</th>
-              <th className="table-th">Market</th>
-              <th className="table-th">Product Interest</th>
-              <th className="table-th">Owner</th>
-              <th className="table-th text-center">Score</th>
-              <th className="table-th">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {leads.length === 0 && (
-              <tr>
-                <td colSpan={7} className="table-td text-center text-gray-400 py-10">
-                  No leads found.{" "}
-                  <Link href="/leads/new" className="text-brand-600 hover:underline">Add the first one</Link>
-                </td>
-              </tr>
-            )}
-            {leads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                <td className="table-td font-medium">
-                  <Link href={`/leads/${lead.id}`} className="text-brand-600 hover:underline">
-                    {lead.name}
-                  </Link>
-                  {lead.title && <p className="text-xs text-gray-400">{lead.title}</p>}
-                </td>
-                <td className="table-td text-gray-600">{lead.company ?? "—"}</td>
-                <td className="table-td text-gray-500">{COUNTRIES[lead.markets] ?? lead.markets}</td>
-                <td className="table-td text-gray-500">
-                  {lead.productInterest ? (PRODUCTS[lead.productInterest] ?? lead.productInterest) : "—"}
-                </td>
-                <td className="table-td text-gray-500">
-                  {lead.owner?.name ?? <span className="text-gray-300">Unassigned</span>}
-                </td>
-                <td className="table-td text-center"><ScoreBadge score={lead.score} /></td>
-                <td className="table-td">
-                  <span className={`badge ${LEAD_STATUS_COLORS[lead.status] ?? "bg-gray-100 text-gray-700"}`}>
-                    {LEAD_STATUSES[lead.status] ?? lead.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <LeadsTable
+        leads={JSON.parse(JSON.stringify(leads)) as LeadRow[]}
+        owners={owners}
+      />
     </div>
   );
 }

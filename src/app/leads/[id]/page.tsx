@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  COUNTRIES, LEAD_STATUSES, LEAD_STATUS_COLORS, PRODUCTS,
-  DIGITAL_MATURITY, LEAD_SOURCES, ACTIVITY_TYPES,
+  LEAD_STATUSES, LEAD_STATUS_COLORS, LEAD_SOURCES, ACTIVITY_TYPES, marketLabels,
 } from "@/lib/constants";
+import { SALES_MOTIONS, parseProductList } from "@/lib/products";
+import { fmtMoney, fmtDate, isOverdue } from "@/lib/format";
+import ProductBadge from "@/components/ProductBadge";
 import ConvertLeadButton from "./ConvertLeadButton";
 
 async function getLead(id: string) {
@@ -51,7 +53,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               </>
             )}
             <span className="text-gray-300">·</span>
-            <span>{COUNTRIES[lead.markets] ?? lead.markets}</span>
+            <span>{marketLabels(lead.markets)}</span>
             {lead.sector && (
               <>
                 <span className="text-gray-300">·</span>
@@ -81,22 +83,41 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       {/* Attributes */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Product Interest</p>
-          <p className="text-lg font-bold text-brand-600 mt-1">
-            {lead.productInterest ? (PRODUCTS[lead.productInterest] ?? lead.productInterest) : "—"}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Primary Product</p>
+          <div className="mt-1.5"><ProductBadge product={lead.primaryProduct} size="md" /></div>
+          {parseProductList(lead.secondaryProducts).length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-2">
+              <span className="text-[11px] text-gray-400 w-full">Also interested in:</span>
+              {parseProductList(lead.secondaryProducts).map((k) => (
+                <ProductBadge key={k} product={k} muted />
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Est. Value / Motion</p>
+          <p className="text-lg font-bold text-gray-800 mt-1">
+            {lead.estimatedValue != null ? fmtMoney(lead.estimatedValue) : "—"}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {lead.salesMotion ? (SALES_MOTIONS[lead.salesMotion] ?? lead.salesMotion) : "No motion set"}
+            {lead.source ? ` · ${LEAD_SOURCES[lead.source] ?? lead.source}` : ""}
           </p>
         </div>
         <div className="card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Digital Maturity</p>
-          <p className="text-lg font-bold text-purple-600 mt-1">
-            {lead.digitalMaturity ? (DIGITAL_MATURITY[lead.digitalMaturity] ?? lead.digitalMaturity) : "—"}
-          </p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</p>
-          <p className="text-lg font-bold text-orange-600 mt-1">
-            {lead.source ? (LEAD_SOURCES[lead.source] ?? lead.source) : "—"}
-          </p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Next Action</p>
+          {lead.nextAction ? (
+            <>
+              <p className={`text-sm font-medium mt-1 ${isOverdue(lead.nextActionDate) && lead.status !== "DISQUALIFIED" ? "text-red-600" : "text-gray-800"}`}>
+                {lead.nextAction}
+              </p>
+              {lead.nextActionDate && (
+                <p className="text-xs text-gray-400 mt-1">Due {fmtDate(lead.nextActionDate)}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-lg font-bold text-gray-300 mt-1">—</p>
+          )}
         </div>
         <div className="card p-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</p>

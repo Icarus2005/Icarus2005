@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { CONTACT_ROLES, DEAL_STAGES, STAGE_COLORS, DEAL_TYPES, ACTIVITY_TYPES } from "@/lib/constants";
+import { CONTACT_ROLES, ACTIVITY_TYPES, stageColor } from "@/lib/constants";
+import ProductBadge from "@/components/ProductBadge";
 
 async function getContact(id: string) {
   return prisma.contact.findUnique({
     where: { id },
     include: {
       account: true,
-      opportunities: { include: { opportunity: true } },
+      opportunities: { include: { opportunity: { include: { stageRef: true } } } },
       activities: { orderBy: { date: "desc" }, take: 20 },
     },
   });
@@ -81,15 +82,15 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
           )}
           <div className="space-y-3">
             {contact.opportunities.map(({ opportunity: opp }) => (
-              <div key={opp.id} className="flex items-center justify-between">
-                <div>
+              <div key={opp.id} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
                   <Link href={`/opportunities/${opp.id}`} className="text-sm font-medium text-brand-600 hover:underline">
                     {opp.name}
                   </Link>
-                  <p className="text-xs text-gray-500">{DEAL_TYPES[opp.type] ?? opp.type}</p>
+                  <div className="mt-0.5"><ProductBadge product={opp.product} /></div>
                 </div>
-                <span className={`badge ${STAGE_COLORS[opp.stage]}`}>
-                  {DEAL_STAGES[opp.stage] ?? opp.stage}
+                <span className={`badge shrink-0 ${stageColor(opp.stage)}`}>
+                  {opp.stageRef?.name ?? opp.stage}
                 </span>
               </div>
             ))}

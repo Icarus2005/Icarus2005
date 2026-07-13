@@ -3,15 +3,19 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   GCC_COUNTRIES, SECTORS, COMPANY_SIZES, CONTACT_ROLES,
-  DEAL_STAGES, DEAL_TYPES, STAGE_COLORS, ACTIVITY_TYPES,
+  ACCOUNT_TIERS, ACTIVITY_TYPES, stageColor,
 } from "@/lib/constants";
+import { ALL_PRODUCT_KEYS, PRODUCTS_META } from "@/lib/products";
+import { fmtMoney as fmt } from "@/lib/format";
+import ProductBadge from "@/components/ProductBadge";
 
 async function getAccount(id: string) {
   return prisma.account.findUnique({
     where: { id },
     include: {
+      owner: { select: { id: true, name: true } },
       contacts: { orderBy: { createdAt: "asc" } },
-      opportunities: { orderBy: { updatedAt: "desc" } },
+      opportunities: { include: { stageRef: true }, orderBy: { updatedAt: "desc" } },
       activities: {
         include: { contact: true, opportunity: true },
         orderBy: { date: "desc" },
@@ -19,12 +23,6 @@ async function getAccount(id: string) {
       },
     },
   });
-}
-
-function fmt(n: number) {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n}`;
 }
 
 export default async function AccountDetailPage({
@@ -35,10 +33,16 @@ export default async function AccountDetailPage({
   const account = await getAccount(params.id);
   if (!account) notFound();
 
-  const openDeals = account.opportunities.filter(
-    (o) => !["CLOSED_WON", "CLOSED_LOST"].includes(o.stage)
-  );
+  const openDeals = account.opportunities.filter((o) => !o.closedAt);
   const pipelineValue = openDeals.reduce((s, o) => s + (o.value ?? 0), 0);
+  const activeProducts = Array.from(new Set(openDeals.map((o) => o.product))).filter(
+    (p) => p !== "UNASSIGNED"
+  );
+  // Group ALL opportunities by product for the product-grouped panel
+  const productGroups = ALL_PRODUCT_KEYS.map((key) => ({
+    key,
+    opps: account.opportunities.filter((o) => o.product === key),
+  })).filter((g) => g.opps.length > 0);
 
   return (
     <div className="p-8">
@@ -52,7 +56,15 @@ export default async function AccountDetailPage({
       {/* Account Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{account.name}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">{account.name}</h1>
+            {activeProducts.map((p) => (
+              <ProductBadge key={p} product={p} />
+            ))}
+            {account.tier && (
+              <span className="badge bg-gray-100 text-gray-600">{ACCOUNT_TIERS[account.tier] ?? account.tier}</span>
+            )}
+          </div>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <span className="text-sm text-gray-500">
               {GCC_COUNTRIES[account.country] ?? account.country}
@@ -61,6 +73,12 @@ export default async function AccountDetailPage({
             <span className="text-sm text-gray-500">
               {SECTORS[account.sector] ?? account.sector}
             </span>
+            {account.owner && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span className="text-sm text-gray-500">Owner: {account.owner.name}</span>
+              </>
+            )}
             {account.industry && (
               <>
                 <span className="text-gray-300">·</span>
@@ -157,10 +175,10 @@ export default async function AccountDetailPage({
           </div>
         </div>
 
-        {/* Opportunities */}
+        {/* Opportunities grouped by product */}
         <div className="card p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-semibold text-gray-700">Opportunities</h2>
+            <h2 className="text-sm font-semibold text-gray-700">Opportunities by Product</h2>
             <Link
               href={`/opportunities/new?accountId=${account.id}`}
               className="text-xs text-brand-600 hover:underline"
@@ -168,35 +186,52 @@ export default async function AccountDetailPage({
               + Add
             </Link>
           </div>
-          {account.opportunities.length === 0 && (
+          {productGroups.length === 0 && (
             <p className="text-sm text-gray-400">No opportunities yet.</p>
           )}
-          <div className="space-y-3">
-            {account.opportunities.map((opp) => (
-              <div key={opp.id} className="flex items-center justify-between">
-                <div>
-                  <Link
-                    href={`/opportunities/${opp.id}`}
-                    className="text-sm font-medium text-brand-600 hover:underline"
-                  >
-                    {opp.name}
-                  </Link>
-                  <p className="text-xs text-gray-500">
-                    {DEAL_TYPES[opp.type] ?? opp.type}
-                    {opp.expectedCloseDate &&
-                      ` · Close ${new Date(opp.expectedCloseDate).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}`}
-                  </p>
+          <div className="space-y-5">
+            {productGroups.map((group) => {
+              const meta = PRODUCTS_META[group.key];
+              const groupValue = group.opps
+                .filter((o) => !o.closedAt)
+                .reduce((s, o) => s + (o.value ?? 0), 0);
+              return (
+                <div key={group.key}>
+                  <div className="flex items-center justify-between mb-2">
+                    <ProductBadge product={group.key} size="md" />
+                    {groupValue > 0 && (
+                      <span className={`text-xs font-semibold ${meta.text}`}>{fmt(groupValue)} open</span>
+                    )}
+                  </div>
+                  <div className="space-y-2 pl-1 border-l-2 border-gray-100 ml-1">
+                    {group.opps.map((opp) => (
+                      <div key={opp.id} className="flex items-center justify-between pl-3">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/opportunities/${opp.id}`}
+                            className="text-sm font-medium text-brand-600 hover:underline"
+                          >
+                            {opp.name}
+                          </Link>
+                          <p className="text-xs text-gray-500">
+                            {opp.expectedCloseDate &&
+                              `Close ${new Date(opp.expectedCloseDate).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}`}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`badge ${stageColor(opp.stage)}`}>
+                            {opp.stageRef?.name ?? opp.stage}
+                          </span>
+                          {opp.value && (
+                            <p className="text-xs text-gray-500 mt-0.5">{fmt(opp.value)}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className={`badge ${STAGE_COLORS[opp.stage]}`}>
-                    {DEAL_STAGES[opp.stage] ?? opp.stage}
-                  </span>
-                  {opp.value && (
-                    <p className="text-xs text-gray-500 mt-0.5">{fmt(opp.value)}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

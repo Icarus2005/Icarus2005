@@ -2,14 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  DEAL_STAGES, STAGE_COLORS, DEAL_TYPES, CONTACT_ROLES, ACTIVITY_TYPES, COUNTRIES,
+  CONTACT_ROLES, ACTIVITY_TYPES, marketLabels, stageColor,
 } from "@/lib/constants";
+import { HEALTH_STATUSES, HEALTH_COLORS } from "@/lib/products";
+import { fmtDate, isOverdue, daysSince } from "@/lib/format";
+import ProductBadge from "@/components/ProductBadge";
 
 async function getOpportunity(id: string) {
   return prisma.opportunity.findUnique({
     where: { id },
     include: {
       account: true,
+      stageRef: true,
+      pipeline: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
       contacts: { include: { contact: true } },
       activities: {
@@ -41,18 +46,32 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{opp.name}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">{opp.name}</h1>
+            <ProductBadge product={opp.product} size="md" />
+            <span className={`badge ${HEALTH_COLORS[opp.healthStatus] ?? "bg-gray-100 text-gray-600"}`}>
+              {HEALTH_STATUSES[opp.healthStatus] ?? opp.healthStatus}
+            </span>
+          </div>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <Link href={`/accounts/${opp.account.id}`} className="text-sm text-brand-600 hover:underline">
               {opp.account.name}
             </Link>
-            <span className={`badge ${STAGE_COLORS[opp.stage]}`}>
-              {DEAL_STAGES[opp.stage] ?? opp.stage}
+            <span className={`badge ${stageColor(opp.stage)}`}>
+              {opp.stageRef?.name ?? opp.stage}
             </span>
-            <span className="text-sm text-gray-500">{DEAL_TYPES[opp.type] ?? opp.type}</span>
-            <span className="text-sm text-gray-400">· {COUNTRIES[opp.markets] ?? opp.markets}</span>
+            <span className="text-sm text-gray-400">
+              {opp.pipeline?.name ?? ""} · {daysSince(opp.stageChangedAt)}d in stage
+            </span>
+            <span className="text-sm text-gray-400">· {marketLabels(opp.markets)}</span>
             {opp.owner && <span className="text-sm text-gray-400">· Owned by {opp.owner.name}</span>}
           </div>
+          {opp.nextAction && (
+            <p className={`text-sm mt-2 ${isOverdue(opp.nextActionDate) && !opp.closedAt ? "text-red-600 font-medium" : "text-gray-600"}`}>
+              Next: {opp.nextAction}
+              {opp.nextActionDate ? ` — due ${fmtDate(opp.nextActionDate)}` : ""}
+            </p>
+          )}
           {opp.notes && (
             <p className="text-sm text-gray-600 mt-2 max-w-xl">{opp.notes}</p>
           )}

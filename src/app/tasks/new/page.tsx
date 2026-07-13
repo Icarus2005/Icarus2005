@@ -4,6 +4,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import OwnerSelect from "@/components/OwnerSelect";
+import { BUSINESS_LINES, PRODUCTS_META } from "@/lib/products";
+import { TASK_PRIORITIES } from "@/lib/constants";
 
 function NewTaskPageForm() {
   const router = useRouter();
@@ -11,12 +13,19 @@ function NewTaskPageForm() {
   const prefillLeadId = searchParams.get("leadId") ?? "";
   const prefillAccountId = searchParams.get("accountId") ?? "";
   const prefillOpportunityId = searchParams.get("opportunityId") ?? "";
+  const prefillProduct = searchParams.get("product") ?? "";
 
   const [leads, setLeads] = useState<{ id: string; name: string; company: string | null }[]>([]);
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
   const [opportunities, setOpportunities] = useState<{ id: string; name: string }[]>([]);
+  const [leadId, setLeadId] = useState(prefillLeadId);
+  const [opportunityId, setOpportunityId] = useState(prefillOpportunityId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Product is inherited from a linked lead/opportunity; the explicit selector
+  // only applies when the task is linked to an account/contact or nothing.
+  const productInherited = Boolean(leadId || opportunityId);
 
   useEffect(() => {
     Promise.all([
@@ -68,10 +77,18 @@ function NewTaskPageForm() {
           <input name="title" required className="input" placeholder="e.g. Follow up with Omar on proposal" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="label">Due Date</label>
             <input name="dueDate" type="date" className="input" />
+          </div>
+          <div>
+            <label className="label">Priority</label>
+            <select name="priority" defaultValue="MEDIUM" className="input">
+              {Object.entries(TASK_PRIORITIES).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label">Assigned To</label>
@@ -82,7 +99,7 @@ function NewTaskPageForm() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Linked Lead</label>
-            <select name="leadId" defaultValue={prefillLeadId} className="input">
+            <select name="leadId" value={leadId} onChange={(e) => setLeadId(e.target.value)} className="input">
               <option value="">None</option>
               {leads.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -93,13 +110,29 @@ function NewTaskPageForm() {
           </div>
           <div>
             <label className="label">Linked Deal</label>
-            <select name="opportunityId" defaultValue={prefillOpportunityId} className="input">
+            <select name="opportunityId" value={opportunityId} onChange={(e) => setOpportunityId(e.target.value)} className="input">
               <option value="">None</option>
               {opportunities.map((o) => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="label">Product</label>
+          {productInherited ? (
+            <p className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+              Inherited from the linked {opportunityId ? "deal" : "lead"} — no selection needed.
+            </p>
+          ) : (
+            <select name="product" defaultValue={prefillProduct} className="input">
+              <option value="">No product context</option>
+              {BUSINESS_LINES.map((k) => (
+                <option key={k} value={k}>{PRODUCTS_META[k].label}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
