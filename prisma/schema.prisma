@@ -54,6 +54,19 @@ model PipelineStage {
   @@index([pipelineId, order])
 }
 
+// A user-saved filter combination for a list page. `query` stores the URL
+// query string so reopening a view reproduces it exactly.
+model SavedView {
+  id        String   @id @default(cuid())
+  name      String
+  page      String // leads | opportunities | accounts | contacts | tasks | activities
+  query     String
+  createdAt DateTime @default(now())
+
+  @@unique([page, name])
+  @@index([page])
+}
+
 // ─── Team ────────────────────────────────────────────────────────────────────
 
 model TeamMember {

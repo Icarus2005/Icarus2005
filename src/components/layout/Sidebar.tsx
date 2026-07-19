@@ -18,6 +18,7 @@ import {
   Compass,
   Briefcase,
   Inbox,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey } from "@/lib/products";
@@ -81,6 +82,18 @@ function SidebarInner() {
             <p className="text-brand-300/50 text-[11px] leading-tight">Sales Platform</p>
           </div>
         </Link>
+      </div>
+
+      {/* Global search trigger */}
+      <div className="px-3 pb-1">
+        <button
+          onClick={() => window.dispatchEvent(new Event("arqone:open-search"))}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-200/60 hover:text-white text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300"
+        >
+          <Search size={15} strokeWidth={1.8} aria-hidden />
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="text-[10px] text-brand-300/50 border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
+        </button>
       </div>
 
       {/* Nav */}

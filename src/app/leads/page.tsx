@@ -7,7 +7,11 @@ import { COUNTRIES, LEAD_STATUSES, LEAD_SOURCES } from "@/lib/constants";
 import { SALES_MOTIONS, parseProductParam, PRODUCTS_META } from "@/lib/products";
 import { leadProductWhere } from "@/lib/filters";
 import ProductSelector from "@/components/ProductSelector";
+import SavedViews from "@/components/SavedViews";
+import ExportButton from "@/components/ExportButton";
 import LeadsTable, { type LeadRow } from "./LeadsTable";
+
+const PAGE_SIZE = 50;
 
 type SearchParams = {
   search?: string;
@@ -18,42 +22,51 @@ type SearchParams = {
   motion?: string;
   source?: string;
   view?: string;
+  page?: string;
 };
 
-async function getLeads(sp: SearchParams) {
+function leadsWhere(sp: SearchParams) {
   const product = parseProductParam(sp.product);
-  return prisma.lead.findMany({
-    where: {
-      AND: [
-        sp.search
-          ? {
-              OR: [
-                { name: { contains: sp.search } },
-                { company: { contains: sp.search } },
-              ],
-            }
-          : {},
-        sp.status ? { status: sp.status } : {},
-        sp.markets ? { markets: { contains: sp.markets } } : {},
-        leadProductWhere(product ?? ""),
-        sp.ownerId ? { ownerId: sp.ownerId } : {},
-        sp.motion ? { salesMotion: sp.motion } : {},
-        sp.source ? { source: sp.source } : {},
-        sp.view === "overdue" ? { nextActionDate: { lt: new Date() }, status: { not: "DISQUALIFIED" } } : {},
-      ],
-    },
-    include: { owner: { select: { id: true, name: true } } },
-    orderBy: [{ score: "desc" }, { createdAt: "desc" }],
-  });
+  return {
+    AND: [
+      sp.search
+        ? {
+            OR: [
+              { name: { contains: sp.search } },
+              { company: { contains: sp.search } },
+            ],
+          }
+        : {},
+      sp.status ? { status: sp.status } : {},
+      sp.markets ? { markets: { contains: sp.markets } } : {},
+      leadProductWhere(product ?? ""),
+      sp.ownerId ? { ownerId: sp.ownerId } : {},
+      sp.motion ? { salesMotion: sp.motion } : {},
+      sp.source ? { source: sp.source } : {},
+      sp.view === "overdue"
+        ? { nextActionDate: { lt: new Date() }, status: { not: "DISQUALIFIED" } }
+        : {},
+    ],
+  };
 }
 
 export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
   const product = parseProductParam(searchParams.product);
-  const [leads, owners, unassignedCount] = await Promise.all([
-    getLeads(searchParams),
+  const pageNum = Math.max(1, parseInt(searchParams.page ?? "1") || 1);
+  const where = leadsWhere(searchParams);
+  const [leads, total, owners, unassignedCount] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      include: { owner: { select: { id: true, name: true } } },
+      orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+      skip: (pageNum - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.lead.count({ where }),
     prisma.teamMember.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.lead.count({ where: { primaryProduct: "UNASSIGNED", status: { not: "DISQUALIFIED" } } }),
   ]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const status = searchParams.status ?? "";
 
@@ -73,7 +86,10 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
           <h1 className="text-2xl font-bold text-gray-900">
             {product ? `${PRODUCTS_META[product].label} Leads` : "Leads"}
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{leads.length} leads</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {total} lead{total !== 1 ? "s" : ""}
+            {totalPages > 1 ? ` · page ${pageNum} of ${totalPages}` : ""}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {unassignedCount > 0 && product !== "UNASSIGNED" && (
@@ -84,6 +100,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
               <Inbox size={15} aria-hidden /> Unassigned queue ({unassignedCount})
             </Link>
           )}
+          <ExportButton entity="leads" />
           <Link href={`/leads/new${product ? `?product=${product}` : ""}`} className="btn-primary">
             <Plus size={16} aria-hidden /> New Lead
           </Link>
@@ -91,8 +108,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
       </div>
 
       {/* Product selector */}
-      <div className="mb-4">
+      <div className="mb-3">
         <ProductSelector />
+      </div>
+
+      {/* Saved views */}
+      <div className="mb-4">
+        <SavedViews page="leads" />
       </div>
 
       {/* Status quick filters */}
@@ -169,6 +191,37 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         leads={JSON.parse(JSON.stringify(leads)) as LeadRow[]}
         owners={owners}
       />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <nav className="flex items-center justify-between mt-4" aria-label="Leads pagination">
+          <p className="text-sm text-gray-500">
+            Showing {(pageNum - 1) * PAGE_SIZE + 1}–{Math.min(pageNum * PAGE_SIZE, total)} of {total}
+          </p>
+          <div className="flex gap-2">
+            {(() => {
+              const pageQS = (p: number) => {
+                const params = new URLSearchParams();
+                for (const [k, v] of Object.entries({ ...searchParams, page: p > 1 ? String(p) : undefined })) {
+                  if (v) params.set(k, v);
+                }
+                const s = params.toString();
+                return s ? `?${s}` : "";
+              };
+              return (
+                <>
+                  {pageNum > 1 && (
+                    <Link href={`/leads${pageQS(pageNum - 1)}`} className="btn-secondary">Previous</Link>
+                  )}
+                  {pageNum < totalPages && (
+                    <Link href={`/leads${pageQS(pageNum + 1)}`} className="btn-secondary">Next</Link>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

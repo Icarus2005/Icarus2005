@@ -1,20 +1,17 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CircleDot, Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getPipelines } from "@/lib/catalog";
-import { COUNTRIES, MARKET_SHORT, marketLabels, stageColor } from "@/lib/constants";
-import {
-  PRODUCTS_META,
-  BUSINESS_LINES,
-  parseProductParam,
-  HEALTH_COLORS,
-  HEALTH_STATUSES,
-} from "@/lib/products";
-import { fmtMoney, fmtDate, daysSince, isOverdue } from "@/lib/format";
+import { COUNTRIES, MARKET_SHORT, stageColor } from "@/lib/constants";
+import { PRODUCTS_META, BUSINESS_LINES, parseProductParam } from "@/lib/products";
+import { fmtMoney, fmtDate, isOverdue } from "@/lib/format";
 import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
+import SavedViews from "@/components/SavedViews";
+import ExportButton from "@/components/ExportButton";
+import PipelineBoard, { type BoardOpp, type BoardStage } from "./PipelineBoard";
 
 type SearchParams = {
   product?: string;
@@ -63,79 +60,6 @@ async function getOpportunities(sp: SearchParams) {
   });
 }
 
-function ownerInitials(name: string) {
-  return name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-}
-
-type Opp = Awaited<ReturnType<typeof getOpportunities>>[number];
-
-function OpportunityCard({ opp }: { opp: Opp }) {
-  const inStage = daysSince(opp.stageChangedAt);
-  const nextOverdue = opp.nextActionDate && isOverdue(opp.nextActionDate) && !opp.closedAt;
-  return (
-    <Link
-      href={`/opportunities/${opp.id}`}
-      className="card p-3.5 block hover:shadow-md hover:border-brand-200 transition-all"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-gray-800 line-clamp-2">{opp.name}</p>
-        <span
-          title={HEALTH_STATUSES[opp.healthStatus] ?? opp.healthStatus}
-          className={`shrink-0 mt-0.5 badge ${HEALTH_COLORS[opp.healthStatus] ?? "bg-gray-100 text-gray-600"}`}
-        >
-          {HEALTH_STATUSES[opp.healthStatus]?.split(" ")[0] ?? opp.healthStatus}
-        </span>
-      </div>
-      <p className="text-xs text-brand-600 mt-0.5">{opp.account.name}</p>
-
-      <div className="flex items-center justify-between mt-2">
-        <ProductBadge product={opp.product} />
-        {opp.value != null && (
-          <span className="text-sm font-semibold text-gray-800">{fmtMoney(opp.value)}</span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 mt-2 text-[11px] text-gray-500 flex-wrap">
-        {opp.probability != null && <span>{opp.probability}%</span>}
-        {opp.expectedCloseDate && (
-          <span className="inline-flex items-center gap-1">
-            <CalendarClock size={11} aria-hidden /> {fmtDate(opp.expectedCloseDate)}
-          </span>
-        )}
-        {inStage != null && (
-          <span className="inline-flex items-center gap-1" title="Days in stage">
-            <CircleDot size={11} aria-hidden /> {inStage}d in stage
-          </span>
-        )}
-        {marketLabels(opp.markets) !== "—" && (
-          <span className="text-gray-400">{marketLabels(opp.markets)}</span>
-        )}
-      </div>
-
-      {opp.nextAction && (
-        <div
-          className={`mt-2 pt-2 border-t border-gray-50 text-[11px] flex items-start gap-1.5 ${
-            nextOverdue ? "text-red-600" : "text-gray-500"
-          }`}
-        >
-          {nextOverdue && <AlertTriangle size={11} className="mt-0.5 shrink-0" aria-hidden />}
-          <span className="line-clamp-1">{opp.nextAction}</span>
-          {opp.nextActionDate && <span className="shrink-0 font-medium">{fmtDate(opp.nextActionDate)}</span>}
-        </div>
-      )}
-
-      {opp.owner && (
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center">
-            {ownerInitials(opp.owner.name)}
-          </span>
-          <span className="text-[11px] text-gray-400">{opp.owner.name}</span>
-        </div>
-      )}
-    </Link>
-  );
-}
-
 export default async function OpportunitiesPage({
   searchParams,
 }: {
@@ -177,14 +101,22 @@ export default async function OpportunitiesPage({
             {open.length} open deals · {fmtMoney(pipelineValue)} pipeline · {fmtMoney(weightedValue)} weighted
           </p>
         </div>
-        <Link href={`/opportunities/new${product ? `?product=${product}` : ""}`} className="btn-primary">
-          <Plus size={16} aria-hidden /> New Deal
-        </Link>
+        <div className="flex items-center gap-2">
+          <ExportButton entity="opportunities" />
+          <Link href={`/opportunities/new${product ? `?product=${product}` : ""}`} className="btn-primary">
+            <Plus size={16} aria-hidden /> New Deal
+          </Link>
+        </div>
       </div>
 
       {/* Product selector — always ahead of the board */}
-      <div className="mb-4">
+      <div className="mb-3">
         <ProductSelector />
+      </div>
+
+      {/* Saved views */}
+      <div className="mb-4">
+        <SavedViews page="opportunities" />
       </div>
 
       {/* Toolbar */}
@@ -274,48 +206,23 @@ export default async function OpportunitiesPage({
         </>
       )}
 
-      {/* PRODUCT BOARD */}
+      {/* PRODUCT BOARD — drag a card between stages to move it */}
       {view === "pipeline" && product && activePipeline && (
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2">
-          {activePipeline.stages
-            .filter((s) => s.active)
-            .map((stage) => {
-              const cards = open.filter((o) => o.stageId === stage.id);
-              const closedCards = opportunities.filter((o) => o.closedAt && o.stageId === stage.id);
-              const shown = stage.isWon || stage.isLost ? closedCards : cards;
-              const stageValue = shown.reduce((s, o) => s + (o.value ?? 0), 0);
-              const weighted = shown.reduce(
-                (s, o) => s + ((o.value ?? 0) * (o.probability ?? 0)) / 100,
-                0
-              );
-              return (
-                <div key={stage.id} className="flex-shrink-0 w-[300px]">
-                  <div className="sticky top-0 z-10 bg-[#f7f8fb] pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`badge ${stageColor(stage.key)}`}>{stage.name}</span>
-                        <span className="text-xs text-gray-400 font-medium shrink-0">{shown.length}</span>
-                      </div>
-                      <span className="text-xs text-gray-500 font-semibold shrink-0">{fmtMoney(stageValue)}</span>
-                    </div>
-                    {!stage.isWon && !stage.isLost && stageValue > 0 && (
-                      <p className="text-[11px] text-gray-400 mt-0.5">weighted {fmtMoney(weighted)}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2.5">
-                    {shown.map((opp) => (
-                      <OpportunityCard key={opp.id} opp={opp} />
-                    ))}
-                    {shown.length === 0 && (
-                      <div className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center">
-                        <p className="text-xs text-gray-400">No deals in {stage.name}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
+        <PipelineBoard
+          stages={
+            activePipeline.stages
+              .filter((s) => s.active)
+              .map((s) => ({
+                id: s.id,
+                key: s.key,
+                name: s.name,
+                isWon: s.isWon,
+                isLost: s.isLost,
+                defaultProbability: s.defaultProbability,
+              })) as BoardStage[]
+          }
+          opportunities={JSON.parse(JSON.stringify(opportunities)) as BoardOpp[]}
+        />
       )}
 
       {/* LIST VIEW (also the All-Products default table) */}
