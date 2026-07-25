@@ -1,0 +1,10 @@
+[build]
+  command = "prisma generate && next build"
+
+[build.environment]
+  # Prisma's generated client is used at request time by serverless
+  # functions; the Next.js runtime plugin below handles the rest.
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
