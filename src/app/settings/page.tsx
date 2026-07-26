@@ -14,8 +14,9 @@ import {
 import TeamPanel from "./TeamPanel";
 import ProductsPanel from "./ProductsPanel";
 import PipelinesPanel from "./PipelinesPanel";
+import KnowledgePanel from "./KnowledgePanel";
 
-const TABS = ["Workspace", "Team", "Products", "Pipelines", "Markets", "Fields"] as const;
+const TABS = ["Workspace", "Team", "Products", "Pipelines", "Knowledge", "Markets", "Fields"] as const;
 type Tab = (typeof TABS)[number];
 
 function WorkspacePanel() {
@@ -38,11 +39,19 @@ function WorkspacePanel() {
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Storage</span>
-          <span className="font-medium text-gray-900">Local SQLite (prisma/dev.db)</span>
+          <span className="font-medium text-gray-900">Postgres via <code className="text-xs">DATABASE_URL</code></span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Authentication</span>
-          <span className="font-medium text-gray-900">None — single machine (Supabase auth planned)</span>
+          <span className="text-gray-500">Access control</span>
+          <span className="font-medium text-gray-900">
+            Shared password gate (<code className="text-xs">CRM_ACCESS_PASSWORD</code>) — per-user auth planned
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">Proposal generation</span>
+          <span className="font-medium text-gray-900">
+            <code className="text-xs">ANTHROPIC_API_KEY</code> when set; templates otherwise
+          </span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500">Local reset</span>
@@ -142,6 +151,7 @@ function SettingsInner() {
       {tab === "Team" && <TeamPanel />}
       {tab === "Products" && <ProductsPanel />}
       {tab === "Pipelines" && <PipelinesPanel />}
+      {tab === "Knowledge" && <KnowledgePanel />}
       {tab === "Markets" && <MarketsPanel />}
       {tab === "Fields" && <FieldsPanel />}
     </div>
