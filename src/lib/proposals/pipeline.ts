@@ -49,7 +49,39 @@ language for pain points. Output markdown with these sections:
 ## Pain Points
 ## Success Criteria
 ## Constraints & Timeline
+## Pricing Discussed
+Quote VERBATIM any figures, rates, ranges, discounts or budget statements either side
+mentioned — including who said them. If money was discussed but no figure was given, say so.
+If nothing was said about money at all, write exactly: NONE DISCUSSED.
 ## Open Questions`;
+
+/**
+ * Deterministic sweep for money mentioned in a transcript. Used by the template
+ * path so that pricing said aloud is still captured without a language model —
+ * the pricing guardrail must not depend on an API key being present.
+ */
+function sweepPricingLines(transcript: string): string | null {
+  const MONEY =
+    /(\$|usd|aed|sar|qar|eur|£)\s?[\d,.]+\s?(k|m|thousand|million)?|\b\d[\d,.]*\s?(usd|aed|sar|qar|dollars?|dirhams?|riyals?)\b/i;
+  const hits = transcript
+    .split(/\n|(?<=[.!?])\s+/)
+    .map((l) => l.trim())
+    .filter((l) => l && MONEY.test(l))
+    .slice(0, 12);
+  if (hits.length === 0) return null;
+  return `_Detected automatically from the transcript — verify against the call before issuing._\n${hits
+    .map((l) => `- ${l}`)
+    .join("\n")}`;
+}
+
+/** Pulls the "Pricing Discussed" section out of the analyzer's markdown. */
+function extractQuotedPricing(requirements: string): string | null {
+  const match = requirements.match(/##\s*Pricing Discussed\s*\n([\s\S]*?)(?:\n##\s|\s*$)/i);
+  if (!match) return null;
+  const body = match[1].trim();
+  if (!body || /^none discussed\.?$/i.test(body)) return null;
+  return body.slice(0, 2000);
+}
 
 async function runAnalyzer(p: ProposalRecord) {
   const transcript = p.transcript?.rawTranscript ?? "";
@@ -138,6 +170,15 @@ client ever buys all of it. Include ONLY the components that were actually discu
 as evidenced by the call analysis. Silently omit everything else — never pad the proposal with
 services the prospect did not ask about.
 
+CRITICAL PRICING RULE — precedence order:
+1. If PRICING QUOTED ON THE CALL is present, use exactly those figures. A number said aloud to
+   the client is a commitment; the catalogue's standard rates do NOT override it.
+2. If the quoted figures conflict with the catalogue, follow the quoted figures and add a bolded
+   note under Commercials: **Note: reflects pricing discussed on the call, which differs from
+   standard rates — confirm before issuing.**
+3. If no pricing was discussed, use the catalogue's standard rates.
+4. If neither exists, write [PRICING TO CONFIRM]. Never invent a number.
+
 Ground every claim in the supplied analysis, research and catalogue — never invent case studies,
 client names, metrics or credentials. Where a number is unknown (pricing, timeline), insert a
 clearly marked placeholder like [PRICING TO CONFIRM] rather than guessing. Follow the supplied
@@ -173,8 +214,11 @@ async function runWriter(p: ProposalRecord) {
 Client: ${p.clientName ?? p.account?.name ?? "the client"}
 Indicative value: ${p.estimatedValue ? fmtMoney(p.estimatedValue) : "not yet established"}
 
-## SERVICE CATALOGUE (include only what was discussed)
+## SERVICE CATALOGUE (include only what was discussed; standard rates)
 ${kb.catalog || "(no catalogue configured)"}
+
+## PRICING QUOTED ON THE CALL${p.quotedPricing ? " — TAKES PRECEDENCE" : ""}
+${p.quotedPricing ?? "(nothing quoted — fall back to catalogue rates)"}
 
 ## DOCUMENT TEMPLATE
 ${kb.template || "Use: Executive Summary, Understanding Your Requirements, Proposed Approach, Scope of Work, Timeline, Commercials, Next Steps."}
@@ -278,6 +322,11 @@ export async function advanceProposal(proposalId: string) {
       const { content, engine } = await runAnalyzer(p);
       data.requirements = content;
       data.generatedBy = engine;
+      // What was actually said about money on the call outranks the catalogue.
+      const quoted =
+        extractQuotedPricing(content) ??
+        sweepPricingLines(p.transcript?.rawTranscript ?? "");
+      if (quoted) data.quotedPricing = quoted;
     } else if (target === "RESEARCHING") {
       const { content, engine } = await runResearch(p);
       data.research = content;

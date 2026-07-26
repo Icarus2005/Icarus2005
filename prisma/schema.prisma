@@ -128,6 +128,7 @@ model Proposal {
   notes          String?
   failureReason  String?
   emailDraft     String? // draft cover email — never auto-sent
+  quotedPricing  String? // pricing actually stated on the call — overrides the catalogue
 
   // Provenance: which engine produced the content
   generatedBy String? // ANTHROPIC | TEMPLATE

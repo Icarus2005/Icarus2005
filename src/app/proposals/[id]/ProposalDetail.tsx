@@ -22,6 +22,7 @@ type Proposal = {
   draftContent: string | null;
   formatted: string | null;
   emailDraft: string | null;
+  quotedPricing: string | null;
   failureReason: string | null;
   generatedBy: string | null;
   stageChangedAt: string;
@@ -32,7 +33,7 @@ type Proposal = {
   events: { id: string; stage: string; status: string; detail: string | null; createdAt: string }[];
 };
 
-const TABS = ["Document", "Requirements", "Research", "Email", "History"] as const;
+const TABS = ["Document", "Requirements", "Research", "Pricing", "Email", "History"] as const;
 
 export default function ProposalDetail({ proposal }: { proposal: Proposal }) {
   const router = useRouter();
@@ -87,6 +88,7 @@ export default function ProposalDetail({ proposal }: { proposal: Proposal }) {
     tab === "Document" ? (p.formatted ?? p.draftContent)
     : tab === "Requirements" ? p.requirements
     : tab === "Research" ? p.research
+    : tab === "Pricing" ? p.quotedPricing
     : tab === "Email" ? p.emailDraft
     : null;
 
@@ -244,7 +246,9 @@ export default function ProposalDetail({ proposal }: { proposal: Proposal }) {
             </pre>
           ) : (
             <p className="text-sm text-gray-400">
-              {tab === "Email" ? (
+              {tab === "Pricing" ? (
+                "Nothing about pricing was captured from the call — the proposal will use catalogue rates."
+              ) : tab === "Email" ? (
                 <span className="inline-flex items-center gap-2">
                   <Mail size={14} aria-hidden /> The draft email is written when the proposal is delivered.
                 </span>

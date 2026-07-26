@@ -87,6 +87,32 @@ Indicative investment. Mark unknowns [PRICING TO CONFIRM].
 Three numbered actions, each with an owner.`,
     },
     {
+      id: "kb_pricing_structure",
+      kind: "SERVICE_CATALOG",
+      title: "Pricing structure and rules",
+      product: null,
+      content: `**Rates are placeholders — set real figures before issuing any proposal.**
+
+| SKU | Rate | Notes |
+|---|---|---|
+| Executive briefing (half-day) | [SET RATE] | Entry SKU — priced for access, not margin |
+| Full-day workshop | [SET RATE] | |
+| Multi-day engagement (per additional day) | [SET RATE] | |
+| Programme (multi-week) | [SET RATE] | Quote as a programme fee, not a day count |
+| Retainer / office hours | [SET MONTHLY RATE] | Land-and-expand after a first engagement |
+
+Rules:
+- Travel and accommodation are quoted **separately**, never absorbed into the headline fee.
+- Quote in USD by default; AED or SAR where the client's procurement requires it.
+- Price on outcome and access, not hours. A short high-value session is not "cheap because it is short".
+- Always present three options; the middle one is the intended purchase.
+- **Discount scope, never rate.** To reduce a price, remove a component and say which one.
+  Never reduce the day rate — a rate quoted once becomes the rate expected forever.
+- Early-stage discounts must be framed as time-boxed "founding client" terms in exchange for
+  a reference or case study, so they do not set a permanent precedent.
+- Every proposal states what is explicitly **out of scope** to prevent creep.`,
+    },
+    {
       id: "kb_brand_default",
       kind: "BRAND",
       title: "ArqOne brand and tone",
