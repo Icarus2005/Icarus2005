@@ -19,6 +19,8 @@ import {
   Briefcase,
   Inbox,
   Search,
+  Mic,
+  FileSignature,
   type LucideIcon,
 } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey } from "@/lib/products";
@@ -35,6 +37,8 @@ const MAIN_NAV: NavItem[] = [
 ];
 
 const WORK_NAV: NavItem[] = [
+  { href: "/meetings", label: "Meetings", icon: Mic },
+  { href: "/proposals", label: "Proposals", icon: FileSignature, carryProduct: true },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, carryProduct: true },
   { href: "/activities", label: "Activities", icon: Clock, carryProduct: true },
   { href: "/import", label: "Import CSV", icon: Upload },

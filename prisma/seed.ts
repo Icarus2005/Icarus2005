@@ -15,6 +15,7 @@ import {
   pipelineTemplateFor,
   resolveStageKey,
 } from "../src/lib/products";
+import { seedProposalKnowledge } from "./seedKnowledge";
 
 const prisma = new PrismaClient();
 
@@ -388,6 +389,7 @@ async function main() {
   await seedLeads(team);
   await seedTasksAndActivities(team, accounts, contacts);
   await backfillPipelines();
+  await seedProposalKnowledge(prisma);
   console.log("ArqOne seed complete (idempotent — safe to re-run).");
 }
 

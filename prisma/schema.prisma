@@ -68,6 +68,118 @@ model SavedView {
   @@index([page])
 }
 
+// ─── Proposal pipeline (meeting → triage → proposal → CRM) ──────────────────
+
+// A sales-call transcript captured from a meeting recorder (Fathom, Fireflies,
+// manual paste…). Cheap triage decides whether it warrants a proposal before
+// any expensive generation runs.
+model MeetingTranscript {
+  id            String   @id @default(cuid())
+  source        String   @default("MANUAL") // FATHOM | FIREFLIES | WEBHOOK | MANUAL
+  externalId    String?  @unique // recorder's id — makes re-delivery idempotent
+  title         String
+  meetingDate   DateTime
+  durationMins  Int?
+  attendees     String? // comma-separated emails
+  rawTranscript String
+
+  // Triage (Phase 2)
+  triageStatus    String  @default("PENDING") // PENDING | QUALIFIED | SKIPPED | FAILED
+  triageReason    String?
+  triageScore     Int? // 0–100 proposal-worthiness
+  detectedProduct String? // canonical product key
+  triagedAt       DateTime?
+
+  // Linking into the shared CRM
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  proposals Proposal[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([triageStatus])
+  @@index([meetingDate])
+}
+
+// A proposal moving through the generation pipeline. Mirrors the phases:
+// analyse transcript → research client → write → format → human review →
+// deliver (creates/links a CRM Opportunity).
+model Proposal {
+  id      String @id @default(cuid())
+  title   String
+  product String @default("UNASSIGNED") // canonical product key
+  stage   String @default("QUEUED")
+  // QUEUED | ANALYZING | RESEARCHING | DRAFTING | FORMATTING | REVIEW | APPROVED | DELIVERED | ARCHIVED
+  stageChangedAt DateTime @default(now())
+
+  // Generated artifacts, one per pipeline skill
+  requirements String? // Transcript Analyzer output
+  research     String? // Client Research output
+  draftContent String? // Proposal Writer output (markdown)
+  formatted    String? // Proposal Formatter output (final markdown)
+
+  estimatedValue Float?
+  clientName     String?
+  notes          String?
+  failureReason  String?
+  emailDraft     String? // draft cover email — never auto-sent
+
+  // Provenance: which engine produced the content
+  generatedBy String? // ANTHROPIC | TEMPLATE
+
+  transcriptId  String?
+  transcript    MeetingTranscript? @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  accountId     String?
+  account       Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity?       @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  ownerId       String?
+  owner         TeamMember?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  events    ProposalEvent[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([stage])
+  @@index([product])
+  @@index([ownerId])
+}
+
+// The "binder" the proposal writer works from: service catalogue, document
+// template, brand guidelines and past winning proposals. Instructions alone
+// produce generic output — this is the context half of the system.
+model ProposalKnowledge {
+  id        String   @id @default(cuid())
+  kind      String // SERVICE_CATALOG | TEMPLATE | BRAND | WINNING_EXAMPLE
+  title     String
+  content   String
+  product   String? // null = applies to every business line
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind])
+  @@index([product])
+}
+
+// Append-only audit trail of every pipeline stage run.
+model ProposalEvent {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  stage      String
+  status     String // STARTED | COMPLETED | FAILED
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([proposalId, createdAt])
+}
+
 // ─── Team ────────────────────────────────────────────────────────────────────
 
 model TeamMember {
@@ -81,6 +193,7 @@ model TeamMember {
   tasks         Task[]
   activities    Activity[]
   accounts      Account[]
+  proposals     Proposal[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -114,6 +227,7 @@ model Lead {
   owner                  TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   activities             Activity[]
   tasks                  Task[]
+  transcripts            MeetingTranscript[]
   createdAt              DateTime    @default(now())
   updatedAt              DateTime    @updatedAt
 
@@ -140,6 +254,8 @@ model Account {
   opportunities   Opportunity[]
   activities      Activity[]
   tasks           Task[]
+  transcripts     MeetingTranscript[]
+  proposals       Proposal[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -160,6 +276,7 @@ model Contact {
   opportunities OpportunityContact[]
   activities    Activity[]
   tasks         Task[]
+  transcripts   MeetingTranscript[]
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 }
@@ -192,6 +309,7 @@ model Opportunity {
   contacts             OpportunityContact[]
   activities           Activity[]
   tasks                Task[]
+  proposals            Proposal[]
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 
