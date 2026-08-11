@@ -5,8 +5,10 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // Supabase: DATABASE_URL is the pooled (pgbouncer) connection used at
-  // runtime; DIRECT_URL is the direct connection Prisma Migrate needs.
+  // DATABASE_URL is the pooled connection used at runtime; DIRECT_URL is the
+  // unpooled connection Prisma Migrate needs. Works with any Postgres host
+  // that distinguishes the two (Neon/Netlify DB, Supabase, etc.) — set both
+  // to the same value for a host that doesn't pool.
   directUrl = env("DIRECT_URL")
 }
 
