@@ -68,12 +68,13 @@ this live under a subdomain of `arqonelabs.com`:
    - `CRM_ACCESS_PASSWORD` — a shared password gating the whole app (HTTP Basic
      Auth) until per-user login ships. **Do not deploy without this set** —
      without it the CRM is reachable by anyone with the URL.
-4. **Apply migrations once**, from your machine, using the same two
-   connection strings:
+4. **(Optional) Seed sample data**, from your machine:
    ```bash
-   DATABASE_URL="<pooled-url>" DIRECT_URL="<unpooled-url>" npx prisma migrate deploy
-   DATABASE_URL="<pooled-url>" npm run db:seed   # optional, for sample data
+   DATABASE_URL="<pooled-url>" npm run db:seed
    ```
+   Migrations don't need a manual step — the build command runs
+   `prisma migrate deploy` before `next build`, so every deploy applies any
+   pending migrations against whatever `DATABASE_URL`/`DIRECT_URL` are set.
 5. **Deploy**, then add the subdomain: in Netlify *Domain management → Add
    domain alias*, add e.g. `crm.arqonelabs.com`. Netlify gives you a DNS
    target (usually a CNAME to `<sitename>.netlify.app`, or an A/ALIAS record

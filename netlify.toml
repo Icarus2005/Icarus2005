@@ -1,5 +1,7 @@
 [build]
-  command = "prisma generate && next build"
+  # migrate deploy only applies pending migrations (never destructive/reset);
+  # requires DATABASE_URL and DIRECT_URL set as site environment variables.
+  command = "prisma migrate deploy && prisma generate && next build"
 
 [build.environment]
   # Prisma's generated client is used at request time by serverless
