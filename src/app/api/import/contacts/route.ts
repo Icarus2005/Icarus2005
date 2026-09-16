@@ -1,56 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { planContactImport } from "@/lib/contactImport";
 
 // Expected CSV columns:
 // firstName, lastName, accountName, email, phone, title, role
+//
+// Deduplication: contacts are matched by email before any create — both
+// against existing contacts and against earlier rows in the same file. A
+// match is never silently dropped: it is reported as a clear
+// "skipped-duplicate" warning naming the existing contact, and no duplicate
+// person is created. Rows without an email cannot be deduplicated and are
+// always created. See src/lib/contactImport.ts for the (unit-tested)
+// decision logic.
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
 
-  // Build account name → id lookup
-  const accounts = await prisma.account.findMany({ select: { id: true, name: true } });
+  const [accounts, existingContacts] = await Promise.all([
+    prisma.account.findMany({ select: { id: true, name: true } }),
+    prisma.contact.findMany({
+      where: { email: { not: null } },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    }),
+  ]);
   const accountMap = new Map(accounts.map((a) => [a.name.toLowerCase().trim(), a.id]));
+  const existingByEmail = new Map(
+    existingContacts.map((c) => [c.email!.toLowerCase(), { id: c.id, firstName: c.firstName, lastName: c.lastName }])
+  );
 
-  const results = { created: 0, skipped: 0, errors: [] as string[] };
+  const plan = planContactImport(rows, accountMap, existingByEmail);
 
-  for (const row of rows) {
-    const firstName = row.firstName?.trim();
-    const lastName = row.lastName?.trim();
-    if (!firstName || !lastName) {
-      results.errors.push(`Row skipped: missing firstName or lastName`);
+  const results = {
+    created: 0,
+    skipped: 0,
+    duplicates: 0,
+    errors: [] as string[],
+    warnings: [] as string[],
+  };
+
+  for (const item of plan) {
+    if (item.outcome === "error") {
+      results.errors.push(item.message);
       results.skipped++;
       continue;
     }
-
-    const accountName = row.accountName?.trim();
-    const accountId = accountName ? accountMap.get(accountName.toLowerCase()) : null;
-
-    if (accountName && !accountId) {
-      results.errors.push(`Contact "${firstName} ${lastName}" skipped: account "${accountName}" not found — import accounts first`);
+    if (item.outcome === "duplicate") {
+      results.warnings.push(item.message);
+      results.duplicates++;
       results.skipped++;
       continue;
     }
-
-    if (!accountId) {
-      results.errors.push(`Contact "${firstName} ${lastName}" skipped: accountName is required`);
-      results.skipped++;
-      continue;
-    }
-
     try {
-      await prisma.contact.create({
-        data: {
-          firstName,
-          lastName,
-          accountId,
-          email: row.email?.trim() || null,
-          phone: row.phone?.trim() || null,
-          title: row.title?.trim() || null,
-          role: row.role?.trim() || null,
-        },
-      });
+      await prisma.contact.create({ data: item.data });
       results.created++;
     } catch {
-      results.errors.push(`Failed to create contact "${firstName} ${lastName}"`);
+      results.errors.push(`Failed to create contact "${item.data.firstName} ${item.data.lastName}"`);
       results.skipped++;
     }
   }
