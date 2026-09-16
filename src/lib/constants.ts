@@ -98,13 +98,44 @@ export const DIGITAL_MATURITY: Record<string, string> = {
   HIGH: "High",
 };
 
+// Structured lead provenance (Lead.sourceType + free-text Lead.sourceDetail,
+// e.g. sourceType=EVENT, sourceDetail="ATM Dubai 2026"). Distinct from
+// SALES_MOTIONS in products.ts, which answers "how do we sell it" rather than
+// "where did it come from". LEAD_SOURCES is kept as the export name for
+// back-compat with the legacy flat Lead.source field, which is read-only now.
 export const LEAD_SOURCES: Record<string, string> = {
-  REFERRAL: "Referral",
   EVENT: "Event / Conference",
+  REFERRAL: "Referral",
   INBOUND: "Inbound",
   OUTBOUND: "Outbound",
-  LINKEDIN: "LinkedIn",
   PARTNER: "Partner",
+  EXISTING_RELATIONSHIP: "Existing Relationship",
+  LINKEDIN: "LinkedIn",
+  WEBSITE: "Website",
+  OTHER: "Other",
+};
+
+// Alias used going forward for the structured Lead.sourceType field.
+export const LEAD_SOURCE_TYPES = LEAD_SOURCES;
+
+// ─── Use case / context ──────────────────────────────────────────────────────
+// Suggested values for Lead.useCase / Opportunity.useCase — a controlled but
+// extensible string, not a hard enum: these are suggestions surfaced in the
+// UI and used to flag unrecognized values on import, but any free-text value
+// is accepted so the field can extend across every product (PlacePulse,
+// Plymio, AI Navigator, Advisory) without a schema change or a new column on
+// Account/Contact.
+export const USE_CASES: Record<string, string> = {
+  AIRPORT_INTELLIGENCE: "Airport Intelligence",
+  DESTINATION_INTELLIGENCE: "Destination Intelligence",
+  HOSPITALITY_INTELLIGENCE: "Hospitality Intelligence",
+  RETAIL_INTELLIGENCE: "Mall / Retail Intelligence",
+  MOBILITY_VISITATION: "Mobility / Visitation",
+  CONSUMER_SPEND_INTELLIGENCE: "Consumer / Spend Intelligence",
+  CUSTOMER_EXPERIENCE: "Customer Experience",
+  PUBLIC_SENTIMENT: "Public Feedback / Sentiment",
+  COMPETITIVE_LOCATION_INTELLIGENCE: "Competitive / Location Intelligence",
+  PARTNERSHIP_DATA_OPPORTUNITY: "Partnership / Data Opportunity",
   OTHER: "Other",
 };
 
@@ -163,8 +194,12 @@ export const ACTIVITY_TYPES: Record<string, string> = {
   MEETING: "Meeting",
   CALL: "Call",
   EMAIL: "Email",
-  NOTE: "Note",
+  WHATSAPP: "WhatsApp",
+  LINKEDIN: "LinkedIn",
   DEMO: "Demo",
+  EVENT_INTERACTION: "Event Interaction",
+  NOTE: "Note",
+  OTHER: "Other",
 };
 
 export const TASK_STATUSES: Record<string, string> = {

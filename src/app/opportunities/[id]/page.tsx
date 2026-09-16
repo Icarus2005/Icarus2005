@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  CONTACT_ROLES, ACTIVITY_TYPES, marketLabels, stageColor,
+  CONTACT_ROLES, ACTIVITY_TYPES, USE_CASES, marketLabels, stageColor,
 } from "@/lib/constants";
 import { HEALTH_STATUSES, HEALTH_COLORS } from "@/lib/products";
 import { fmtDate, isOverdue, daysSince } from "@/lib/format";
+import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
 
 async function getOpportunity(id: string) {
@@ -21,6 +22,7 @@ async function getOpportunity(id: string) {
         include: { contact: true },
         orderBy: { date: "desc" },
       },
+      tasks: { orderBy: { dueDate: "asc" } },
     },
   });
 }
@@ -66,12 +68,25 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
             <span className="text-sm text-gray-400">· {marketLabels(opp.markets)}</span>
             {opp.owner && <span className="text-sm text-gray-400">· Owned by {opp.owner.name}</span>}
           </div>
-          {opp.nextAction && (
-            <p className={`text-sm mt-2 ${isOverdue(opp.nextActionDate) && !opp.closedAt ? "text-red-600 font-medium" : "text-gray-600"}`}>
-              Next: {opp.nextAction}
-              {opp.nextActionDate ? ` — due ${fmtDate(opp.nextActionDate)}` : ""}
-            </p>
+          {opp.useCase && (
+            <p className="text-sm text-gray-500 mt-2">{USE_CASES[opp.useCase] ?? opp.useCase}</p>
           )}
+          {(() => {
+            const next = deriveNextInteraction(
+              opp.tasks.filter((t) => t.status === "OPEN"),
+              opp.nextAction,
+              opp.nextActionDate
+            );
+            if (!next) return null;
+            const overdue = next.date && isOverdue(next.date) && !opp.closedAt;
+            return (
+              <p className={`text-sm mt-2 ${overdue ? "text-red-600 font-medium" : "text-gray-600"}`}>
+                Next: {next.label}
+                {next.date ? ` — due ${fmtDate(next.date)}` : ""}
+                {next.source === "task" ? " (open task)" : ""}
+              </p>
+            );
+          })()}
           {opp.notes && (
             <p className="text-sm text-gray-600 mt-2 max-w-xl">{opp.notes}</p>
           )}

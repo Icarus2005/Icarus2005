@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  LEAD_STATUSES, LEAD_STATUS_COLORS, LEAD_SOURCES, ACTIVITY_TYPES, marketLabels,
+  LEAD_STATUSES, LEAD_STATUS_COLORS, LEAD_SOURCES, USE_CASES, ACTIVITY_TYPES, marketLabels,
 } from "@/lib/constants";
 import { SALES_MOTIONS, parseProductList } from "@/lib/products";
 import { fmtMoney, fmtDate, isOverdue } from "@/lib/format";
+import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
 import ConvertLeadButton from "./ConvertLeadButton";
 
@@ -101,23 +102,36 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           </p>
           <p className="text-xs text-gray-400 mt-1">
             {lead.salesMotion ? (SALES_MOTIONS[lead.salesMotion] ?? lead.salesMotion) : "No motion set"}
-            {lead.source ? ` · ${LEAD_SOURCES[lead.source] ?? lead.source}` : ""}
+            {(lead.sourceType || lead.source) &&
+              ` · ${LEAD_SOURCES[lead.sourceType ?? lead.source ?? ""] ?? lead.sourceType ?? lead.source}`}
+            {lead.sourceDetail ? ` (${lead.sourceDetail})` : ""}
           </p>
+          {lead.useCase && (
+            <p className="text-xs text-gray-400 mt-1">{USE_CASES[lead.useCase] ?? lead.useCase}</p>
+          )}
         </div>
         <div className="card p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Next Action</p>
-          {lead.nextAction ? (
-            <>
-              <p className={`text-sm font-medium mt-1 ${isOverdue(lead.nextActionDate) && lead.status !== "DISQUALIFIED" ? "text-red-600" : "text-gray-800"}`}>
-                {lead.nextAction}
-              </p>
-              {lead.nextActionDate && (
-                <p className="text-xs text-gray-400 mt-1">Due {fmtDate(lead.nextActionDate)}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-lg font-bold text-gray-300 mt-1">—</p>
-          )}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Next Interaction</p>
+          {(() => {
+            const next = deriveNextInteraction(
+              lead.tasks.filter((t) => t.status === "OPEN"),
+              lead.nextAction,
+              lead.nextActionDate
+            );
+            if (!next) return <p className="text-lg font-bold text-gray-300 mt-1">—</p>;
+            const overdue = next.date && isOverdue(next.date) && lead.status !== "DISQUALIFIED";
+            return (
+              <>
+                <p className={`text-sm font-medium mt-1 ${overdue ? "text-red-600" : "text-gray-800"}`}>
+                  {next.label}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {next.date ? `Due ${fmtDate(next.date)}` : "No due date"}
+                  {next.source === "task" ? " · open task" : ""}
+                </p>
+              </>
+            );
+          })()}
         </div>
         <div className="card p-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</p>

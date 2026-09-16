@@ -86,7 +86,7 @@ model MeetingTranscript {
   rawTranscript String
 
   // Triage (Phase 2)
-  triageStatus    String  @default("PENDING") // PENDING | QUALIFIED | SKIPPED | FAILED
+  triageStatus    String    @default("PENDING") // PENDING | QUALIFIED | SKIPPED | FAILED
   triageReason    String?
   triageScore     Int? // 0–100 proposal-worthiness
   detectedProduct String? // canonical product key
@@ -112,10 +112,10 @@ model MeetingTranscript {
 // analyse transcript → research client → write → format → human review →
 // deliver (creates/links a CRM Opportunity).
 model Proposal {
-  id      String @id @default(cuid())
-  title   String
-  product String @default("UNASSIGNED") // canonical product key
-  stage   String @default("QUEUED")
+  id             String   @id @default(cuid())
+  title          String
+  product        String   @default("UNASSIGNED") // canonical product key
+  stage          String   @default("QUEUED")
   // QUEUED | ANALYZING | RESEARCHING | DRAFTING | FORMATTING | REVIEW | APPROVED | DELIVERED | ARCHIVED
   stageChangedAt DateTime @default(now())
 
@@ -204,47 +204,57 @@ model TeamMember {
 // ─── Core records ────────────────────────────────────────────────────────────
 
 model Lead {
-  id                     String      @id @default(cuid())
+  id                     String              @id @default(cuid())
   name                   String
   company                String?
   title                  String?
   email                  String?
   phone                  String?
-  markets                String      @default("AE") // comma-separated market codes
+  markets                String              @default("AE") // comma-separated market codes
   sector                 String?
-  primaryProduct         String      @default("UNASSIGNED") // canonical product key
+  primaryProduct         String              @default("UNASSIGNED") // canonical product key
   secondaryProducts      String? // comma-separated product keys (cross-sell interest)
   digitalMaturity        String? // LOW | MEDIUM | HIGH
-  source                 String?
+  source                 String? // legacy free-text source — superseded by sourceType/sourceDetail; kept for pre-migration records, no longer written by the UI
+  sourceType             String? // EVENT | REFERRAL | INBOUND | OUTBOUND | PARTNER | EXISTING_RELATIONSHIP | LINKEDIN | WEBSITE | OTHER — provenance of the lead. Distinct from salesMotion (how we sell it).
+  sourceDetail           String? // free text detail for sourceType, e.g. "ATM Dubai 2026"
   salesMotion            String? // DIRECT | PARTNER | REFERRAL | INVESTOR | INBOUND | OUTBOUND | EVENT | EXISTING_RELATIONSHIP | OTHER
+  useCase                String? // suggested-but-extensible use case / context, e.g. "AIRPORT_INTELLIGENCE" — see USE_CASES in src/lib/constants.ts. Shared shape across all products, never product-specific columns on Account/Contact.
   tags                   String?
-  status                 String      @default("NEW") // NEW | CONTACTED | QUALIFIED | DISQUALIFIED
+  status                 String              @default("NEW") // NEW | CONTACTED | QUALIFIED | DISQUALIFIED
   score                  Int?
   estimatedValue         Float?
+  // Denormalized summary only — NOT the source of truth for "what's next".
+  // Activity = historical interaction record. Task = future commitment.
+  // UI should prefer the nearest open Task for "Next Interaction" where practical
+  // (see src/lib/nextInteraction.ts) and fall back to this field when no open task exists.
   nextAction             String?
   nextActionDate         DateTime?
   lastActivityAt         DateTime?
   notes                  String?
   convertedOpportunityId String?
   ownerId                String?
-  owner                  TeamMember? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  owner                  TeamMember?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   activities             Activity[]
   tasks                  Task[]
   transcripts            MeetingTranscript[]
-  createdAt              DateTime    @default(now())
-  updatedAt              DateTime    @updatedAt
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   @@index([primaryProduct])
   @@index([status])
   @@index([ownerId])
+  @@index([sourceType])
+  @@index([sourceDetail])
+  @@index([useCase])
 }
 
 model Account {
-  id              String        @id @default(cuid())
-  name            String        @unique
+  id              String              @id @default(cuid())
+  name            String              @unique
   industry        String?
-  country         String        @default("AE")
-  sector          String        @default("PRIVATE")
+  country         String              @default("AE")
+  sector          String              @default("PRIVATE")
   size            String?
   tier            String? // STRATEGIC | KEY | STANDARD
   locationsCount  Int?
@@ -252,15 +262,15 @@ model Account {
   website         String?
   description     String?
   ownerId         String?
-  owner           TeamMember?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  owner           TeamMember?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   contacts        Contact[]
   opportunities   Opportunity[]
   activities      Activity[]
   tasks           Task[]
   transcripts     MeetingTranscript[]
   proposals       Proposal[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([ownerId])
 }
@@ -299,6 +309,11 @@ model Opportunity {
   markets              String               @default("AE")
   forecastCategory     String               @default("PIPELINE") // PIPELINE | BEST_CASE | COMMIT | CLOSED
   healthStatus         String               @default("ON_TRACK") // ON_TRACK | AT_RISK | STALLED
+  useCase              String? // suggested-but-extensible use case / context, e.g. "AIRPORT_INTELLIGENCE" — see USE_CASES in src/lib/constants.ts
+  // Denormalized summary only — NOT the source of truth for "what's next".
+  // Activity = historical interaction record. Task = future commitment.
+  // UI should prefer the nearest open Task for "Next Interaction" where practical
+  // (see src/lib/nextInteraction.ts) and fall back to this field when no open task exists.
   nextAction           String?
   nextActionDate       DateTime?
   expectedCloseDate    DateTime?
@@ -320,6 +335,7 @@ model Opportunity {
   @@index([stageId])
   @@index([ownerId])
   @@index([accountId])
+  @@index([useCase])
 }
 
 model OpportunityContact {
@@ -331,9 +347,12 @@ model OpportunityContact {
   @@id([opportunityId, contactId])
 }
 
+// The canonical historical interaction record — every touchpoint with an
+// account/contact/lead/opportunity is logged here. Never create a second,
+// overlapping interaction model; extend `type` instead.
 model Activity {
   id            String       @id @default(cuid())
-  type          String // MEETING | CALL | EMAIL | NOTE | DEMO
+  type          String // MEETING | CALL | EMAIL | WHATSAPP | LINKEDIN | DEMO | EVENT_INTERACTION | NOTE | OTHER
   subject       String
   notes         String?
   date          DateTime     @default(now())
@@ -355,6 +374,9 @@ model Activity {
   @@index([date])
 }
 
+// The canonical future commitment — "what's next" for a record. Lists and
+// detail pages should derive "Next Interaction" from the nearest open Task
+// (see src/lib/nextInteraction.ts) rather than inventing another field.
 model Task {
   id            String       @id @default(cuid())
   title         String

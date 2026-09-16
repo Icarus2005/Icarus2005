@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isProductKey, parseProductList } from "@/lib/products";
-import { cleanProduct, leadProductWhere } from "@/lib/filters";
+import { cleanProduct, leadProductWhere, leadSourceWhere } from "@/lib/filters";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
   const ownerId = searchParams.get("ownerId") ?? "";
   const motion = searchParams.get("motion") ?? "";
   const source = searchParams.get("source") ?? "";
+  const sourceType = searchParams.get("sourceType") ?? "";
+  const sourceDetail = searchParams.get("sourceDetail") ?? "";
+  const useCase = searchParams.get("useCase") ?? "";
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -31,6 +34,8 @@ export async function GET(req: NextRequest) {
         ownerId ? { ownerId } : {},
         motion ? { salesMotion: motion } : {},
         source ? { source } : {},
+        leadSourceWhere(sourceType, sourceDetail),
+        useCase ? { useCase } : {},
       ],
     },
     include: { owner: { select: { id: true, name: true } } },

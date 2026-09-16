@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Papa from "papaparse";
 import { AlertTriangle, Download, UploadCloud } from "lucide-react";
 import { PRODUCT_KEYS } from "@/lib/products";
+import { IMPORT_COLUMNS } from "@/lib/importSchemas";
 
 // ─── Template definitions ────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ const TEMPLATES = {
     label: "Accounts",
     endpoint: "/api/import/accounts",
     productColumns: [] as string[],
-    columns: ["name", "country", "sector", "industry", "size", "tier", "ownerEmail", "website", "description"],
+    columns: IMPORT_COLUMNS.accounts,
     notes: [
       "name — required, must be unique (existing accounts are matched by name, never duplicated)",
       "country — AE | SA | QA | KW | BH | OM | EG | JO | OTHER  (default: AE)",
@@ -42,11 +43,11 @@ const TEMPLATES = {
     label: "Contacts",
     endpoint: "/api/import/contacts",
     productColumns: [] as string[],
-    columns: ["firstName", "lastName", "accountName", "email", "phone", "title", "role"],
+    columns: IMPORT_COLUMNS.contacts,
     notes: [
       "firstName, lastName — required",
       "accountName — must exactly match an account already in the CRM",
-      "email — used for duplicate protection",
+      "email — checked against existing contacts before import; a match is skipped and reported, never duplicated or silently dropped",
       "role — DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER",
     ],
     sample: [
@@ -65,19 +66,19 @@ const TEMPLATES = {
     label: "Leads",
     endpoint: "/api/import/leads",
     productColumns: ["primaryProduct", "secondaryProducts"],
-    columns: [
-      "name", "company", "title", "email", "phone", "primaryProduct", "secondaryProducts",
-      "markets", "source", "salesMotion", "status", "score", "estimatedValue", "ownerEmail", "notes",
-    ],
+    columns: IMPORT_COLUMNS.leads,
     notes: [
       "name — required",
       "primaryProduct — " + PRODUCT_NOTE.split("— ")[1],
       "secondaryProducts — comma-separated product keys (cross-sell interest)",
       MARKET_NOTE,
-      "salesMotion — DIRECT | PARTNER | REFERRAL | INVESTOR | INBOUND | OUTBOUND | EVENT | EXISTING_RELATIONSHIP | OTHER",
+      "sourceType — EVENT | REFERRAL | INBOUND | OUTBOUND | PARTNER | EXISTING_RELATIONSHIP | LINKEDIN | WEBSITE | OTHER  (provenance — where the lead came from)",
+      "sourceDetail — free text detail for sourceType, e.g. \"ATM Dubai 2026\"",
+      "salesMotion — DIRECT | PARTNER | REFERRAL | INVESTOR | INBOUND | OUTBOUND | EVENT | EXISTING_RELATIONSHIP | OTHER  (how we sell it — distinct from sourceType)",
+      "useCase — what the lead is interested in, e.g. AIRPORT_INTELLIGENCE, HOSPITALITY_INTELLIGENCE, RETAIL_INTELLIGENCE (suggested list, any value accepted)",
       "status — NEW | CONTACTED | QUALIFIED | DISQUALIFIED  (default: NEW)",
       "ownerEmail — must match a team member email",
-      "Unknown product values are imported as UNASSIGNED with a warning — nothing is dropped silently.",
+      "Unknown product values are imported as UNASSIGNED with a warning — nothing is dropped silently. Unrecognized sourceType/useCase values are imported as-is and flagged for review.",
     ],
     sample: [
       {
@@ -88,8 +89,10 @@ const TEMPLATES = {
         primaryProduct: "PLACEPULSE",
         secondaryProducts: "ADVISORY",
         markets: "AE,SA",
-        source: "EVENT",
+        sourceType: "EVENT",
+        sourceDetail: "ATM Dubai 2026",
         salesMotion: "EVENT",
+        useCase: "RETAIL_INTELLIGENCE",
         status: "CONTACTED",
         score: "82",
         estimatedValue: "160000",
@@ -102,10 +105,7 @@ const TEMPLATES = {
     label: "Opportunities",
     endpoint: "/api/import/opportunities",
     productColumns: ["product"],
-    columns: [
-      "name", "accountName", "product", "stage", "value", "probability",
-      "markets", "ownerEmail", "expectedCloseDate", "nextAction", "nextActionDate", "notes",
-    ],
+    columns: IMPORT_COLUMNS.opportunities,
     notes: [
       "name — required",
       "accountName — must exactly match an account already in the CRM",
@@ -114,6 +114,7 @@ const TEMPLATES = {
       MARKET_NOTE,
       "ownerEmail — must match a team member email",
       "expectedCloseDate / nextActionDate — YYYY-MM-DD",
+      "useCase — what this deal is about (suggested list, any value accepted)",
       "Unknown product values are imported as UNASSIGNED with a warning — nothing is dropped silently.",
     ],
     sample: [
@@ -127,6 +128,7 @@ const TEMPLATES = {
         markets: "AE",
         ownerEmail: "sara@arqonelabs.com",
         expectedCloseDate: "2026-09-30",
+        useCase: "RETAIL_INTELLIGENCE",
         nextAction: "Review pilot KPIs",
         nextActionDate: "2026-07-20",
         notes: "Pilot live across 3 flagship malls",
@@ -181,7 +183,7 @@ function Importer({ tab }: { tab: TabKey }) {
   const [fileName, setFileName] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ created: number; skipped: number; errors: string[]; warnings?: string[] } | null>(null);
+  const [result, setResult] = useState<{ created: number; skipped: number; duplicates?: number; errors: string[]; warnings?: string[] } | null>(null);
   const [parseError, setParseError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -341,6 +343,12 @@ function Importer({ tab }: { tab: TabKey }) {
                 <p className="text-xs text-gray-500">Skipped</p>
                 <p className="text-2xl font-bold text-yellow-600">{result.skipped}</p>
               </div>
+              {!!result.duplicates && (
+                <div>
+                  <p className="text-xs text-gray-500">Duplicates (unchanged)</p>
+                  <p className="text-2xl font-bold text-blue-600">{result.duplicates}</p>
+                </div>
+              )}
             </div>
             {(result.warnings ?? []).length > 0 && (
               <ul className="space-y-0.5 mb-2">

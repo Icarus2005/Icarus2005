@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isProductKey } from "@/lib/products";
 import { COUNTRIES } from "@/lib/constants";
+import { resolveLeadSource, resolveUseCase } from "@/lib/leadImport";
 
 // Expected CSV columns:
 // name, company, title, email, phone, primaryProduct, secondaryProducts,
-// markets, source, salesMotion, status, score, estimatedValue, ownerEmail, notes
+// markets, sourceType, sourceDetail, salesMotion, useCase, status, score,
+// estimatedValue, ownerEmail, notes
+//
+// `source` (the old flat column) is still accepted for back-compat: if
+// sourceType is absent but source is present and matches a known source
+// type, it is used as sourceType. Nothing from a valid row is ever silently
+// dropped — unrecognized sourceType/useCase values are kept as-is (useCase
+// is intentionally extensible) or flagged with a warning (sourceType is a
+// fixed set), never discarded.
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
 
@@ -73,6 +82,13 @@ export async function POST(req: NextRequest) {
       ? parseFloat(row.estimatedValue.replace(/[^0-9.]/g, ""))
       : null;
 
+    const { sourceType, warning: sourceWarning } = resolveLeadSource(row, name);
+    if (sourceWarning) results.warnings.push(sourceWarning);
+    const sourceDetail = row.sourceDetail?.trim() || null;
+
+    const { useCase, warning: useCaseWarning } = resolveUseCase(row.useCase, `Lead "${name}"`);
+    if (useCaseWarning) results.warnings.push(useCaseWarning);
+
     try {
       await prisma.lead.create({
         data: {
@@ -85,7 +101,10 @@ export async function POST(req: NextRequest) {
           secondaryProducts: secondary.length ? secondary.join(",") : null,
           markets: markets.length ? markets.join(",") : "AE",
           source: row.source?.trim().toUpperCase() || null,
+          sourceType,
+          sourceDetail,
           salesMotion: row.salesMotion?.trim().toUpperCase() || null,
+          useCase,
           status: status && VALID_STATUSES.includes(status) ? status : "NEW",
           score: score != null && !isNaN(score) ? Math.min(100, Math.max(0, score)) : null,
           estimatedValue: estimatedValue != null && !isNaN(estimatedValue) ? estimatedValue : null,

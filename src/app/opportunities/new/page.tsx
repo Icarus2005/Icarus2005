@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { COUNTRIES } from "@/lib/constants";
+import { COUNTRIES, USE_CASES } from "@/lib/constants";
 import {
   BUSINESS_LINES,
   PRODUCTS_META,
@@ -208,6 +208,24 @@ function NewOpportunityPageForm() {
             <label className="label" htmlFor="op-nextdate">Next Action Due</label>
             <input id="op-nextdate" name="nextActionDate" type="date" className="input" />
           </div>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="op-usecase">
+            Use Case <span className="font-normal text-gray-400">— what this deal is about, shared shape across products</span>
+          </label>
+          <input
+            id="op-usecase"
+            name="useCase"
+            list="op-usecase-options"
+            className="input"
+            placeholder="Select or type a use case"
+          />
+          <datalist id="op-usecase-options">
+            {Object.entries(USE_CASES).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </datalist>
         </div>
 
         <div>

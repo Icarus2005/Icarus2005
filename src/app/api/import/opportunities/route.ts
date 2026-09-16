@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { isProductKey } from "@/lib/products";
 import { COUNTRIES } from "@/lib/constants";
 import { getPipelines } from "@/lib/catalog";
+import { resolveUseCase } from "@/lib/leadImport";
 
 // Expected CSV columns:
 // name, accountName, product, stage, value, probability, markets, ownerEmail,
-// expectedCloseDate, nextAction, nextActionDate, notes
+// expectedCloseDate, useCase, nextAction, nextActionDate, notes
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
 
@@ -82,6 +83,9 @@ export async function POST(req: NextRequest) {
       return isNaN(d.getTime()) ? null : d;
     };
 
+    const { useCase, warning: useCaseWarning } = resolveUseCase(row.useCase, `Deal "${name}"`);
+    if (useCaseWarning) results.warnings.push(useCaseWarning);
+
     try {
       await prisma.opportunity.create({
         data: {
@@ -97,6 +101,7 @@ export async function POST(req: NextRequest) {
               ? Math.min(100, Math.max(0, probability))
               : stage.defaultProbability,
           markets: markets.length ? markets.join(",") : "AE",
+          useCase,
           ownerId: ownerId ?? null,
           expectedCloseDate: parseDate(row.expectedCloseDate),
           nextAction: row.nextAction?.trim() || null,
