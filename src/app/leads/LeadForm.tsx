@@ -6,8 +6,9 @@ import Link from "next/link";
 import {
   COUNTRIES,
   DIGITAL_MATURITY,
-  LEAD_SOURCES,
+  LEAD_SOURCE_TYPES,
   LEAD_STATUSES,
+  USE_CASES,
   parseMarkets,
 } from "@/lib/constants";
 import {
@@ -32,7 +33,10 @@ export type LeadFormValues = {
   secondaryProducts?: string | null;
   digitalMaturity?: string | null;
   source?: string | null;
+  sourceType?: string | null;
+  sourceDetail?: string | null;
   salesMotion?: string | null;
+  useCase?: string | null;
   tags?: string | null;
   status?: string;
   score?: number | null;
@@ -103,7 +107,7 @@ export default function LeadForm({
     body.ownerId = data.ownerId || null;
     if (isEdit) {
       // allow clearing optional text fields on edit
-      for (const k of ["nextAction", "tags", "notes", "nextActionDate"]) {
+      for (const k of ["nextAction", "tags", "notes", "nextActionDate", "sourceType", "sourceDetail", "useCase"]) {
         if (data[k] === "") body[k] = null;
       }
     }
@@ -274,13 +278,28 @@ export default function LeadForm({
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="label" htmlFor="lf-source">Source</label>
-          <select id="lf-source" name="source" defaultValue={lead?.source ?? ""} className="input">
+          <label className="label" htmlFor="lf-sourcetype">Source</label>
+          <select
+            id="lf-sourcetype"
+            name="sourceType"
+            defaultValue={lead?.sourceType ?? lead?.source ?? ""}
+            className="input"
+          >
             <option value="">Select source</option>
-            {Object.entries(LEAD_SOURCES).map(([k, v]) => (
+            {Object.entries(LEAD_SOURCE_TYPES).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="lf-sourcedetail">Source Detail</label>
+          <input
+            id="lf-sourcedetail"
+            name="sourceDetail"
+            defaultValue={lead?.sourceDetail ?? ""}
+            className="input"
+            placeholder="e.g. ATM Dubai 2026"
+          />
         </div>
         <div>
           <label className="label" htmlFor="lf-motion">Sales Motion</label>
@@ -291,9 +310,30 @@ export default function LeadForm({
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="label" htmlFor="lf-value">Estimated Value (USD)</label>
           <input id="lf-value" name="estimatedValue" type="number" min="0" step="1000" defaultValue={lead?.estimatedValue ?? ""} className="input" placeholder="0" />
+        </div>
+        <div className="col-span-2">
+          <label className="label" htmlFor="lf-usecase">
+            Use Case <span className="font-normal text-gray-500">— what this lead is interested in, shared shape across products</span>
+          </label>
+          <input
+            id="lf-usecase"
+            name="useCase"
+            list="lf-usecase-options"
+            defaultValue={lead?.useCase ?? ""}
+            className="input"
+            placeholder="Select or type a use case"
+          />
+          <datalist id="lf-usecase-options">
+            {Object.entries(USE_CASES).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </datalist>
         </div>
       </div>
 

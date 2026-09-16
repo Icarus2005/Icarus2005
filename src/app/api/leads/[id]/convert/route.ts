@@ -87,7 +87,9 @@ export async function POST(
   const carryNotes =
     [
       lead.notes ? `From lead: ${lead.notes}` : "",
-      lead.source ? `Source: ${lead.source}` : "",
+      lead.sourceType || lead.source
+        ? `Source: ${lead.sourceType ?? lead.source}${lead.sourceDetail ? ` (${lead.sourceDetail})` : ""}`
+        : "",
       lead.salesMotion ? `Sales motion: ${lead.salesMotion}` : "",
       lead.tags ? `Tags: ${lead.tags}` : "",
     ]
@@ -109,6 +111,7 @@ export async function POST(
         probability: initialStage.defaultProbability,
         value,
         markets: leadRec.markets,
+        useCase: leadRec.useCase,
         ownerId,
         accountId: account!.id,
         nextAction: leadRec.nextAction,

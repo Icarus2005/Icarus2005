@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { COUNTRIES, parseMarkets } from "@/lib/constants";
+import { COUNTRIES, USE_CASES, parseMarkets } from "@/lib/constants";
 import { FORECAST_CATEGORIES, HEALTH_STATUSES, productLabel } from "@/lib/products";
 import OwnerSelect from "@/components/OwnerSelect";
 import ProductBadge from "@/components/ProductBadge";
@@ -58,7 +58,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
     if (body.probability) body.probability = Number(body.probability);
     body.ownerId = data.ownerId || null;
     body.markets = Array.from(markets);
-    for (const k of ["nextAction", "notes", "nextActionDate", "expectedCloseDate"]) {
+    for (const k of ["nextAction", "notes", "nextActionDate", "expectedCloseDate", "useCase"]) {
       if (data[k] === "") body[k] = null;
     }
     body.decisionMakerEngaged = data.decisionMakerEngaged === "on";
@@ -192,6 +192,25 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
             <input id="oe-nextdate" name="nextActionDate" type="date" defaultValue={nextActionDate} className="input" />
           </div>
         </div>
+        <div>
+          <label className="label" htmlFor="oe-usecase">
+            Use Case <span className="font-normal text-gray-400">— shared shape across products</span>
+          </label>
+          <input
+            id="oe-usecase"
+            name="useCase"
+            list="oe-usecase-options"
+            defaultValue={String(opp.useCase ?? "")}
+            className="input"
+            placeholder="Select or type a use case"
+          />
+          <datalist id="oe-usecase-options">
+            {Object.entries(USE_CASES).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </datalist>
+        </div>
+
         <div>
           <label className="label" htmlFor="oe-close">Expected Close Date</label>
           <input id="oe-close" name="expectedCloseDate" type="date" defaultValue={closeDate} className="input" />
