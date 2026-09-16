@@ -20,6 +20,19 @@ export function oppProductWhere(product: string): Prisma.OpportunityWhereInput {
 }
 
 /**
+ * Where clause for structured lead-source reporting, e.g. "leads sourced
+ * from ATM Dubai 2026": sourceType=EVENT, sourceDetail="ATM Dubai 2026".
+ * sourceDetail matches case-insensitively so callers don't need to know the
+ * exact casing a CSV import stored.
+ */
+export function leadSourceWhere(sourceType: string, sourceDetail: string): Prisma.LeadWhereInput {
+  const and: Prisma.LeadWhereInput[] = [];
+  if (sourceType) and.push({ sourceType });
+  if (sourceDetail) and.push({ sourceDetail: { contains: sourceDetail, mode: "insensitive" } });
+  return and.length ? { AND: and } : {};
+}
+
+/**
  * Where clause matching a task's *inherited* product:
  * opportunity product → lead primary product → own product field.
  */
