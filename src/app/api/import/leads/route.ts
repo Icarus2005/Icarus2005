@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isProductKey } from "@/lib/products";
 import { COUNTRIES } from "@/lib/constants";
 import { resolveLeadSource, resolveUseCase } from "@/lib/leadImport";
+import { detectHeaderMismatch } from "@/lib/importSchemas";
 
 // Expected CSV columns:
 // name, company, title, email, phone, primaryProduct, secondaryProducts,
@@ -17,6 +18,11 @@ import { resolveLeadSource, resolveUseCase } from "@/lib/leadImport";
 // fixed set), never discarded.
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
+
+  const mismatch = detectHeaderMismatch("leads", rows.length > 0 ? Object.keys(rows[0]) : []);
+  if (mismatch) {
+    return NextResponse.json({ created: 0, skipped: rows.length, errors: [mismatch], warnings: [] }, { status: 400 });
+  }
 
   const team = await prisma.teamMember.findMany({ select: { id: true, email: true } });
   const teamMap = new Map(team.map((m) => [m.email.toLowerCase(), m.id]));

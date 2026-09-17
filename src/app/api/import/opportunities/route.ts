@@ -4,12 +4,18 @@ import { isProductKey } from "@/lib/products";
 import { COUNTRIES } from "@/lib/constants";
 import { getPipelines } from "@/lib/catalog";
 import { resolveUseCase } from "@/lib/leadImport";
+import { detectHeaderMismatch } from "@/lib/importSchemas";
 
 // Expected CSV columns:
 // name, accountName, product, stage, value, probability, markets, ownerEmail,
 // expectedCloseDate, useCase, nextAction, nextActionDate, notes
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
+
+  const mismatch = detectHeaderMismatch("opportunities", rows.length > 0 ? Object.keys(rows[0]) : []);
+  if (mismatch) {
+    return NextResponse.json({ created: 0, skipped: rows.length, errors: [mismatch], warnings: [] }, { status: 400 });
+  }
 
   const [accounts, team, pipelines] = await Promise.all([
     prisma.account.findMany({ select: { id: true, name: true } }),
