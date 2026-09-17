@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { planContactImport } from "@/lib/contactImport";
+import { detectHeaderMismatch } from "@/lib/importSchemas";
 
 // Expected CSV columns:
 // firstName, lastName, accountName, email, phone, title, role
@@ -14,6 +15,11 @@ import { planContactImport } from "@/lib/contactImport";
 // decision logic.
 export async function POST(req: NextRequest) {
   const rows: Record<string, string>[] = await req.json();
+
+  const mismatch = detectHeaderMismatch("contacts", rows.length > 0 ? Object.keys(rows[0]) : []);
+  if (mismatch) {
+    return NextResponse.json({ created: 0, skipped: rows.length, duplicates: 0, errors: [mismatch], warnings: [] }, { status: 400 });
+  }
 
   const [accounts, existingContacts] = await Promise.all([
     prisma.account.findMany({ select: { id: true, name: true } }),

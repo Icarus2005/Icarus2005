@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Papa from "papaparse";
 import { AlertTriangle, Download, UploadCloud } from "lucide-react";
 import { PRODUCT_KEYS } from "@/lib/products";
-import { IMPORT_COLUMNS } from "@/lib/importSchemas";
+import { IMPORT_COLUMNS, detectHeaderMismatch, type ImportEntity } from "@/lib/importSchemas";
 
 // ─── Template definitions ────────────────────────────────────────────────────
 
@@ -203,6 +203,13 @@ function Importer({ tab }: { tab: TabKey }) {
       complete(res) {
         if (res.errors.length > 0 && res.data.length === 0) {
           setParseError("Could not parse CSV.");
+          return;
+        }
+        const headers = res.data.length > 0 ? Object.keys(res.data[0]) : (res.meta.fields ?? []);
+        const mismatch = detectHeaderMismatch(tab as ImportEntity, headers);
+        if (mismatch) {
+          setParseError(mismatch);
+          setFileName("");
           return;
         }
         setRows(res.data);
