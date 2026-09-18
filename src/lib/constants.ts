@@ -81,6 +81,7 @@ export const CONTACT_ROLES: Record<string, string> = {
 export const LEAD_STATUSES: Record<string, string> = {
   NEW: "New",
   CONTACTED: "Contacted",
+  ENGAGED: "Engaged",
   QUALIFIED: "Qualified",
   DISQUALIFIED: "Disqualified",
 };
@@ -88,8 +89,103 @@ export const LEAD_STATUSES: Record<string, string> = {
 export const LEAD_STATUS_COLORS: Record<string, string> = {
   NEW: "bg-blue-100 text-blue-700",
   CONTACTED: "bg-yellow-100 text-yellow-700",
+  ENGAGED: "bg-teal-100 text-teal-700",
   QUALIFIED: "bg-green-100 text-green-700",
   DISQUALIFIED: "bg-gray-100 text-gray-500",
+};
+
+// CONVERTED is never a stored Lead.status value — it's derived from
+// convertedOpportunityId being non-null, so storage and display can never
+// drift apart. Use this everywhere the UI needs to *display* lead status.
+export function displayLeadStatus(lead: { status: string; convertedOpportunityId?: string | null }): string {
+  return lead.convertedOpportunityId ? "CONVERTED" : lead.status;
+}
+
+export const LEAD_STATUS_LABELS_WITH_CONVERTED: Record<string, string> = {
+  ...LEAD_STATUSES,
+  CONVERTED: "Converted",
+};
+
+export const LEAD_STATUS_COLORS_WITH_CONVERTED: Record<string, string> = {
+  ...LEAD_STATUS_COLORS,
+  CONVERTED: "bg-violet-100 text-violet-700",
+};
+
+// ─── Contact relationship & provenance ──────────────────────────────────────
+// Distinct from CONTACT_ROLES (organizational/buying authority) above — a
+// contact's relationship warmth is tracked independently so, e.g., an
+// internal connector with no buying authority isn't forced into a Champion/
+// Decision Maker bucket just to reflect that they're a warm relationship.
+export const RELATIONSHIP_STRENGTHS: Record<string, string> = {
+  COLD: "Cold",
+  REFERRED: "Referred",
+  MET: "Met",
+  ENGAGED: "Engaged",
+  INTERNAL_CONNECTOR: "Internal Connector",
+  POTENTIAL_CHAMPION: "Potential Champion",
+  CHAMPION: "Champion",
+};
+
+export const RELATIONSHIP_STRENGTH_COLORS: Record<string, string> = {
+  COLD: "bg-gray-100 text-gray-500",
+  REFERRED: "bg-sky-100 text-sky-700",
+  MET: "bg-blue-100 text-blue-700",
+  ENGAGED: "bg-teal-100 text-teal-700",
+  INTERNAL_CONNECTOR: "bg-indigo-100 text-indigo-700",
+  POTENTIAL_CHAMPION: "bg-amber-100 text-amber-700",
+  CHAMPION: "bg-green-100 text-green-700",
+};
+
+export const ACQUISITION_PATHS: Record<string, string> = {
+  DIRECT_MEETING: "Direct Meeting",
+  INTERNAL_REFERRAL: "Internal Referral",
+  STAND_REFERRAL: "Stand Referral",
+  CARD_PROVIDED: "Card Provided",
+  INTRODUCTION: "Introduction",
+  COLD_TARGET: "Cold Target",
+  EXISTING_RELATIONSHIP: "Existing Relationship",
+};
+
+// ─── Opportunity type ────────────────────────────────────────────────────────
+// Independent of pipeline stage — a Strategic Partnership opportunity still
+// moves through the same PlacePulse stage list as a Commercial one.
+export const OPPORTUNITY_TYPES: Record<string, string> = {
+  COMMERCIAL: "Commercial",
+  STRATEGIC_PARTNERSHIP: "Strategic Partnership",
+  DATA_API_PARTNERSHIP: "Data / API Partnership",
+  REFERRAL_ECOSYSTEM: "Referral / Ecosystem",
+  OTHER: "Other",
+};
+
+export const OPPORTUNITY_TYPE_COLORS: Record<string, string> = {
+  COMMERCIAL: "bg-blue-100 text-blue-700",
+  STRATEGIC_PARTNERSHIP: "bg-violet-100 text-violet-700",
+  DATA_API_PARTNERSHIP: "bg-indigo-100 text-indigo-700",
+  REFERRAL_ECOSYSTEM: "bg-teal-100 text-teal-700",
+  OTHER: "bg-gray-100 text-gray-600",
+};
+
+// ─── Account ↔ Product relationship state ───────────────────────────────────
+// Set explicitly by a user action — never inferred merely from a Lead or
+// Contact existing for that product/account pairing.
+export const ACCOUNT_PRODUCT_STATES: Record<string, string> = {
+  PROSPECT: "Prospect",
+  ENGAGED: "Engaged",
+  OPPORTUNITY: "Opportunity",
+  CUSTOMER: "Customer",
+  PARTNER_PROSPECT: "Partner Prospect",
+  PARTNER: "Partner",
+  DORMANT: "Dormant",
+};
+
+export const ACCOUNT_PRODUCT_STATE_COLORS: Record<string, string> = {
+  PROSPECT: "bg-gray-100 text-gray-600",
+  ENGAGED: "bg-teal-100 text-teal-700",
+  OPPORTUNITY: "bg-blue-100 text-blue-700",
+  CUSTOMER: "bg-green-100 text-green-700",
+  PARTNER_PROSPECT: "bg-amber-100 text-amber-700",
+  PARTNER: "bg-violet-100 text-violet-700",
+  DORMANT: "bg-gray-100 text-gray-400",
 };
 
 export const DIGITAL_MATURITY: Record<string, string> = {

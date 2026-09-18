@@ -49,3 +49,30 @@ export function deriveNextInteraction(
   }
   return null;
 }
+
+// ─── Last interaction ───────────────────────────────────────────────────────
+// Always derived from the most recent Activity — never a stored column, to
+// avoid a second source of truth that can go stale relative to the Activity
+// timeline. Callers pass the record's activities (any order); this picks the
+// most recent by `date`. `Lead.lastActivityAt` is a legacy denormalized field
+// and is intentionally NOT read here — the Activity timeline is canonical.
+
+export type ActivityRef = {
+  type: string;
+  subject: string;
+  date: Date | string;
+};
+
+export type LastInteraction = {
+  label: string;
+  type: string;
+  date: Date | string;
+} | null;
+
+export function deriveLastInteraction(activities: ActivityRef[]): LastInteraction {
+  const latest = [...activities].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  )[0];
+  if (!latest) return null;
+  return { label: latest.subject, type: latest.type, date: latest.date };
+}

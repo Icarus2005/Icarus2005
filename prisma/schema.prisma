@@ -15,14 +15,33 @@ datasource db {
 // ─── Product catalog & pipelines ─────────────────────────────────────────────
 
 model Product {
-  key          String     @id // PLACEPULSE | PLYMIO | AI_NAVIGATOR | ADVISORY | UNASSIGNED
-  name         String
-  description  String?
-  active       Boolean    @default(true)
-  displayOrder Int        @default(0)
-  pipelines    Pipeline[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  key             String           @id // PLACEPULSE | PLYMIO | AI_NAVIGATOR | ADVISORY | UNASSIGNED
+  name            String
+  description     String?
+  active          Boolean          @default(true)
+  displayOrder    Int              @default(0)
+  pipelines       Pipeline[]
+  accountProducts AccountProduct[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+// Account-level relationship state per product/business line — independent of
+// whether a Lead or Opportunity exists yet. Never derive PROSPECT/CUSTOMER/
+// PARTNER automatically from Lead/Contact presence; this is set explicitly.
+model AccountProduct {
+  id                String   @id @default(cuid())
+  accountId         String
+  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  productKey        String
+  product           Product  @relation(fields: [productKey], references: [key])
+  relationshipState String   @default("PROSPECT")
+  // PROSPECT | ENGAGED | OPPORTUNITY | CUSTOMER | PARTNER_PROSPECT | PARTNER | DORMANT
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([accountId, productKey])
+  @@index([productKey])
 }
 
 model Pipeline {
@@ -233,6 +252,14 @@ model Lead {
   lastActivityAt         DateTime?
   notes                  String?
   convertedOpportunityId String?
+  // status values: NEW | CONTACTED | ENGAGED | QUALIFIED | DISQUALIFIED.
+  // CONVERTED is never stored here — it's derived at read time from
+  // convertedOpportunityId being non-null (see src/lib/nextInteraction.ts
+  // sibling helpers), so the two can never drift out of sync.
+  accountId              String?
+  account                Account?            @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  primaryContactId       String?
+  primaryContact         Contact?            @relation("LeadPrimaryContact", fields: [primaryContactId], references: [id], onDelete: SetNull)
   ownerId                String?
   owner                  TeamMember?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   activities             Activity[]
@@ -247,6 +274,8 @@ model Lead {
   @@index([sourceType])
   @@index([sourceDetail])
   @@index([useCase])
+  @@index([accountId])
+  @@index([primaryContactId])
 }
 
 model Account {
@@ -264,11 +293,13 @@ model Account {
   ownerId         String?
   owner           TeamMember?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   contacts        Contact[]
+  leads           Lead[]
   opportunities   Opportunity[]
   activities      Activity[]
   tasks           Task[]
   transcripts     MeetingTranscript[]
   proposals       Proposal[]
+  accountProducts AccountProduct[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -276,28 +307,46 @@ model Account {
 }
 
 model Contact {
-  id            String               @id @default(cuid())
-  firstName     String
-  lastName      String
-  email         String?              @unique
-  phone         String?
-  linkedin      String?
-  title         String?
-  role          String? // DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER
-  accountId     String
-  account       Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  opportunities OpportunityContact[]
-  activities    Activity[]
-  tasks         Task[]
-  transcripts   MeetingTranscript[]
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id                    String               @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String?              @unique
+  phone                 String?
+  linkedin              String?
+  title                 String?
+  role                  String? // organizational/buying role — unchanged: DECISION_MAKER | INFLUENCER | CHAMPION | BLOCKER | OTHER
+  // Relationship warmth/status is a distinct axis from `role` (buying
+  // authority) — a contact can be role=UNKNOWN and relationshipStrength=
+  // INTERNAL_CONNECTOR at the same time. Never reassign existing `role`
+  // values based on this field.
+  relationshipStrength  String? // COLD | REFERRED | MET | ENGAGED | INTERNAL_CONNECTOR | POTENTIAL_CHAMPION | CHAMPION
+  // Provenance — mirrors Lead.sourceType/sourceDetail so contacts that exist
+  // before or without a Lead (e.g. a referral chain) still carry provenance.
+  sourceType            String? // EVENT | REFERRAL | INBOUND | OUTBOUND | PARTNER | EXISTING_RELATIONSHIP | LINKEDIN | WEBSITE | OTHER
+  sourceDetail          String? // free text, e.g. "ATM Dubai 2026"
+  acquisitionPath       String? // DIRECT_MEETING | INTERNAL_REFERRAL | STAND_REFERRAL | CARD_PROVIDED | INTRODUCTION | COLD_TARGET | EXISTING_RELATIONSHIP
+  referredById          String?
+  referredBy            Contact?             @relation("ContactReferral", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals             Contact[]            @relation("ContactReferral")
+  accountId             String
+  account               Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  opportunities         OpportunityContact[]
+  leadsAsPrimaryContact Lead[]               @relation("LeadPrimaryContact")
+  activities            Activity[]
+  tasks                 Task[]
+  transcripts           MeetingTranscript[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([referredById])
+  @@index([relationshipStrength])
 }
 
 model Opportunity {
   id                   String               @id @default(cuid())
   name                 String
   product              String               @default("UNASSIGNED") // canonical product key — exactly one per opportunity
+  type                 String? // COMMERCIAL | STRATEGIC_PARTNERSHIP | DATA_API_PARTNERSHIP | REFERRAL_ECOSYSTEM | OTHER — independent of pipeline stage
   pipelineId           String?
   pipeline             Pipeline?            @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
   stageId              String?
@@ -336,13 +385,22 @@ model Opportunity {
   @@index([ownerId])
   @@index([accountId])
   @@index([useCase])
+  @@index([type])
 }
 
+// The sole source of truth for opportunity stakeholders. The "primary
+// contact" shown on an Opportunity is always derived by reading
+// isPrimary=true here — never store a separate primaryContactId on
+// Opportunity, which would create a second, competing source of truth.
+// Application/service code enforces at most one isPrimary=true row per
+// opportunityId (see src/lib/opportunityContacts.ts).
 model OpportunityContact {
-  opportunityId String
-  contactId     String
-  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  opportunityId   String
+  contactId       String
+  isPrimary       Boolean     @default(false)
+  stakeholderRole String? // free text, e.g. "Technical Evaluator", "Sponsor"
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact         Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@id([opportunityId, contactId])
 }
