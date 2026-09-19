@@ -57,10 +57,6 @@ function normalizeName(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function isAlreadyAdrianRoodt(firstName: string, lastName: string): boolean {
-  return normalizeName(firstName) === "adrian" && normalizeName(lastName) === "roodt";
-}
-
 type StepReport = { step: string; status: "applied" | "already_applied" | "skipped"; detail: string };
 
 async function findContactByName(tx: Prisma.TransactionClient, fullName: string) {
@@ -111,22 +107,15 @@ export async function previewSprint03() {
     prisma.lead.findMany({ select: { id: true, name: true, company: true, accountId: true } }),
   ]);
 
-  // Phase 1 — Contact
+  // Phase 1 — Contact: READ-ONLY. Sprint 03 makes no writes to this Contact
+  // at all — it was corrected manually in the CRM UI. Shown here only so the
+  // reviewer can confirm its current state; `willChange` is always false.
   const contactPhase1 = adrianContact
     ? {
         id: adrianContact.id,
-        before: { firstName: adrianContact.firstName, lastName: adrianContact.lastName },
-        alreadyCanonical: isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName),
-        after: isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName)
-          ? null
-          : { firstName: "Adrian", lastName: "Roodt" },
-        provenanceBefore: {
-          sourceType: adrianContact.sourceType,
-          sourceDetail: adrianContact.sourceDetail,
-          acquisitionPath: adrianContact.acquisitionPath,
-          relationshipStrength: adrianContact.relationshipStrength,
-        },
-        provenanceAfter: { sourceType: "EVENT", sourceDetail: "ATM Dubai 2026", acquisitionPath: "DIRECT_MEETING", relationshipStrength: "ENGAGED" },
+        current: { firstName: adrianContact.firstName, lastName: adrianContact.lastName },
+        willChange: false,
+        note: "Read-only in this Sprint — no fields on this Contact are written by execute.",
       }
     : { error: `contact ${KNOWN.adrianContactId} not found` };
 
@@ -243,30 +232,16 @@ export async function executeSprint03() {
   const report: StepReport[] = [];
 
   await prisma.$transaction(async (tx) => {
-    // ── PHASE 1: Travelport Contact — normalize only if needed ────────────
+    // ── PHASE 1: Travelport Contact — READ-ONLY, no writes ─────────────────
+    // Corrected manually in the CRM UI. This Sprint touches only the Lead.
     const adrianContact = await tx.contact.findUnique({ where: { id: KNOWN.adrianContactId } });
-    if (!adrianContact) {
-      report.push({ step: "Phase 1 — Contact normalize", status: "skipped", detail: `contact ${KNOWN.adrianContactId} not found` });
-    } else if (isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName) && adrianContact.firstName === "Adrian" && adrianContact.lastName === "Roodt") {
-      report.push({ step: "Phase 1 — Contact normalize", status: "already_applied", detail: "already exactly 'Adrian Roodt' — no change" });
-    } else {
-      await tx.contact.update({
-        where: { id: KNOWN.adrianContactId },
-        data: {
-          firstName: "Adrian",
-          lastName: "Roodt",
-          sourceType: "EVENT",
-          sourceDetail: "ATM Dubai 2026",
-          acquisitionPath: "DIRECT_MEETING",
-          relationshipStrength: "ENGAGED",
-        },
-      });
-      report.push({
-        step: "Phase 1 — Contact normalize",
-        status: "applied",
-        detail: `${KNOWN.adrianContactId} normalized '${adrianContact.firstName} ${adrianContact.lastName}' -> 'Adrian Roodt', provenance set (same ID preserved)`,
-      });
-    }
+    report.push({
+      step: "Phase 1 — Contact",
+      status: "skipped",
+      detail: adrianContact
+        ? `left untouched by design — current name: '${adrianContact.firstName} ${adrianContact.lastName}'`
+        : `contact ${KNOWN.adrianContactId} not found`,
+    });
 
     const andyLead = await tx.lead.findUnique({ where: { id: KNOWN.andyLeadId } });
     if (!andyLead) {
