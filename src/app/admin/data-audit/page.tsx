@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { AlertTriangle } from "lucide-react";
 import { getDataAudit } from "@/lib/dataAudit";
 import CopyAuditButton from "./CopyAuditButton";
+import Sprint03Panel from "./Sprint03Panel";
 
 // Internal read-only production diagnostic. No database mutation paths exist
 // on this page or in src/lib/dataAudit.ts — every query is a Prisma
@@ -189,6 +190,10 @@ export default async function DataAuditPage() {
           <Stat label="Contacts with no activity" value={audit.activities.contactsWithNoActivity} />
           <Stat label="Opportunities with no activity" value={audit.activities.opportunitiesWithNoActivity} />
         </Section>
+      </div>
+
+      <div className="mt-6">
+        <Sprint03Panel />
       </div>
 
       <div className="mt-6">
