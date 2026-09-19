@@ -13,10 +13,16 @@ import { Prisma } from "@prisma/client";
 // whole reconciliation lands, or nothing does. It is idempotent — re-running
 // it after a partial or full success only applies what's still pending, so a
 // retry after inspecting a report is always safe.
+//
+// Historical Activity creation (originally Phase 6) is intentionally NOT
+// executed here: Activity.date has no nullable "unknown" representation and
+// no verified ATM Dubai 2026 interaction date is stored anywhere in the CRM,
+// so defaulting to execution time would make historical interactions look
+// like they happened today. Excluded until real dates are supplied.
 
 const KNOWN = {
   travelportAccountId: "cmu54mfsa0015la5xu4p0zqoj",
-  andyContactId: "cmu561w1t001t18nfbfaqj8kw",
+  adrianContactId: "cmu561w1t001t18nfbfaqj8kw",
   andyLeadId: "cmu5625hr002i18nf9sbsvxxx",
   accounts: {
     tourism365: "cmu54mfoy0005la5xp6kfd1dq",
@@ -32,8 +38,27 @@ const KNOWN = {
   },
 } as const;
 
+const OPP_TYPES: Record<string, string> = {
+  [KNOWN.opportunities.sabre]: "STRATEGIC_PARTNERSHIP",
+  [KNOWN.opportunities.tourism365]: "COMMERCIAL",
+  [KNOWN.opportunities.abuDhabiAirports]: "COMMERCIAL",
+  [KNOWN.opportunities.dohaOasis]: "COMMERCIAL",
+};
+
+const STAKEHOLDERS: { label: string; opportunityId: string; contactName: string }[] = [
+  { label: "Tourism 365", opportunityId: KNOWN.opportunities.tourism365, contactName: "Andrew Gaied" },
+  { label: "Abu Dhabi Airports", opportunityId: KNOWN.opportunities.abuDhabiAirports, contactName: "Jezael Carrasco" },
+  { label: "Abu Dhabi Airports", opportunityId: KNOWN.opportunities.abuDhabiAirports, contactName: "Oriol Escofet Bueno" },
+  { label: "Sabre", opportunityId: KNOWN.opportunities.sabre, contactName: "Ishaq Khattak" },
+  { label: "Doha Oasis", opportunityId: KNOWN.opportunities.dohaOasis, contactName: "Muhammad Nasir" },
+];
+
 function normalizeName(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isAlreadyAdrianRoodt(firstName: string, lastName: string): boolean {
+  return normalizeName(firstName) === "adrian" && normalizeName(lastName) === "roodt";
 }
 
 type StepReport = { step: string; status: "applied" | "already_applied" | "skipped"; detail: string };
@@ -41,111 +66,176 @@ type StepReport = { step: string; status: "applied" | "already_applied" | "skipp
 async function findContactByName(tx: Prisma.TransactionClient, fullName: string) {
   const target = normalizeName(fullName);
   const candidates = await tx.contact.findMany({ select: { id: true, firstName: true, lastName: true } });
-  const matches = candidates.filter((c) => normalizeName(`${c.firstName} ${c.lastName}`) === target);
-  return matches;
+  return candidates.filter((c) => normalizeName(`${c.firstName} ${c.lastName}`) === target);
 }
 
 async function linkStakeholder(
   tx: Prisma.TransactionClient,
   report: StepReport[],
-  opportunityLabel: string,
-  opportunityId: string,
-  contactName: string,
-  isPrimary: boolean
+  s: { label: string; opportunityId: string; contactName: string }
 ) {
-  const matches = await findContactByName(tx, contactName);
+  const matches = await findContactByName(tx, s.contactName);
   if (matches.length === 0) {
-    report.push({ step: `${opportunityLabel} — link ${contactName}`, status: "skipped", detail: "no Contact with this exact name exists — not created, per Sprint 03 scope" });
+    report.push({ step: `${s.label} — link ${s.contactName}`, status: "skipped", detail: "no Contact with this exact name exists — not created, per Sprint 03 scope" });
     return;
   }
   if (matches.length > 1) {
-    report.push({ step: `${opportunityLabel} — link ${contactName}`, status: "skipped", detail: `ambiguous: ${matches.length} contacts match this name` });
+    report.push({ step: `${s.label} — link ${s.contactName}`, status: "skipped", detail: `ambiguous: ${matches.length} contacts match this name` });
     return;
   }
   const contactId = matches[0].id;
   const existing = await tx.opportunityContact.findUnique({
-    where: { opportunityId_contactId: { opportunityId, contactId } },
+    where: { opportunityId_contactId: { opportunityId: s.opportunityId, contactId } },
   });
   if (existing) {
-    report.push({ step: `${opportunityLabel} — link ${contactName}`, status: "already_applied", detail: `already linked (isPrimary=${existing.isPrimary})` });
+    report.push({ step: `${s.label} — link ${s.contactName}`, status: "already_applied", detail: `already linked (isPrimary=${existing.isPrimary})` });
     return;
   }
-  await tx.opportunityContact.create({ data: { opportunityId, contactId, isPrimary } });
-  report.push({ step: `${opportunityLabel} — link ${contactName}`, status: "applied", detail: `linked, isPrimary=${isPrimary}` });
+  await tx.opportunityContact.create({ data: { opportunityId: s.opportunityId, contactId, isPrimary: false } });
+  report.push({ step: `${s.label} — link ${s.contactName}`, status: "applied", detail: `linked, isPrimary=false` });
 }
 
-async function ensureActivity(
-  tx: Prisma.TransactionClient,
-  report: StepReport[],
-  opts: {
-    label: string;
-    type: string;
-    subject: string;
-    notes: string;
-    accountId?: string;
-    contactName?: string;
-    leadId?: string;
-    opportunityId?: string;
-  }
-) {
-  let contactId: string | undefined;
-  if (opts.contactName) {
-    const matches = await findContactByName(tx, opts.contactName);
-    if (matches.length === 1) contactId = matches[0].id;
-  }
-  const existing = await tx.activity.findFirst({
-    where: { subject: opts.subject, accountId: opts.accountId ?? null, contactId: contactId ?? null },
-  });
-  if (existing) {
-    report.push({ step: opts.label, status: "already_applied", detail: "an activity with this exact subject/account/contact already exists" });
-    return;
-  }
-  await tx.activity.create({
-    data: {
-      type: opts.type,
-      subject: opts.subject,
-      notes: opts.notes,
-      product: "PLACEPULSE",
-      accountId: opts.accountId,
-      contactId,
-      leadId: opts.leadId,
-      opportunityId: opts.opportunityId,
-      // No confirmed ATM Dubai 2026 interaction date is stored anywhere in
-      // the CRM (no dedicated event-date field on Lead/Contact/Account) —
-      // per Sprint 03 Phase 6, we do not invent a timestamp. `date` defaults
-      // to the record's creation time; the notes state the event context.
-    },
-  });
-  report.push({ step: opts.label, status: "applied", detail: contactId ? "created, linked to matched contact" : "created (contact not linked — no unambiguous match)" });
-}
+// ─── PREVIEW ─────────────────────────────────────────────────────────────
+// Read-only. Returns a full before-state / proposed-write diff for every
+// phase, with record IDs, so the report can be reviewed and approved before
+// executeSprint03() runs.
 
 export async function previewSprint03() {
-  const [andyContact, andyLead, accounts, opportunities, tasks] = await Promise.all([
-    prisma.contact.findUnique({ where: { id: KNOWN.andyContactId } }),
+  const [adrianContact, andyLead, accounts, opportunities, allTasks, allContacts, allLeadsForBackfill] = await Promise.all([
+    prisma.contact.findUnique({ where: { id: KNOWN.adrianContactId } }),
     prisma.lead.findUnique({ where: { id: KNOWN.andyLeadId } }),
     prisma.account.findMany({ where: { id: { in: Object.values(KNOWN.accounts) } } }),
-    prisma.opportunity.findMany({ where: { id: { in: Object.values(KNOWN.opportunities) } }, include: { contacts: true } }),
+    prisma.opportunity.findMany({ where: { id: { in: Object.values(KNOWN.opportunities) } }, include: { contacts: { include: { contact: true } } } }),
     prisma.task.findMany(),
+    prisma.contact.findMany({ select: { id: true, firstName: true, lastName: true } }),
+    prisma.lead.findMany({ select: { id: true, name: true, company: true, accountId: true } }),
   ]);
-  const leadsWithoutAccount = await prisma.lead.count({ where: { accountId: null } });
-  const accountProductCount = await prisma.accountProduct.count({
+
+  // Phase 1 — Contact
+  const contactPhase1 = adrianContact
+    ? {
+        id: adrianContact.id,
+        before: { firstName: adrianContact.firstName, lastName: adrianContact.lastName },
+        alreadyCanonical: isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName),
+        after: isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName)
+          ? null
+          : { firstName: "Adrian", lastName: "Roodt" },
+        provenanceBefore: {
+          sourceType: adrianContact.sourceType,
+          sourceDetail: adrianContact.sourceDetail,
+          acquisitionPath: adrianContact.acquisitionPath,
+          relationshipStrength: adrianContact.relationshipStrength,
+        },
+        provenanceAfter: { sourceType: "EVENT", sourceDetail: "ATM Dubai 2026", acquisitionPath: "DIRECT_MEETING", relationshipStrength: "ENGAGED" },
+      }
+    : { error: `contact ${KNOWN.adrianContactId} not found` };
+
+  // Phase 1 — Lead
+  const leadPhase1 = andyLead
+    ? {
+        id: andyLead.id,
+        before: andyLead.name,
+        after: "Adrian Roodt — Travelport",
+        willChange: andyLead.name !== "Adrian Roodt — Travelport",
+      }
+    : { error: `lead ${KNOWN.andyLeadId} not found` };
+
+  // Phase 2 — Lead.accountId backfill: full per-lead table
+  const accountByNormName = new Map(
+    (await prisma.account.findMany({ select: { id: true, name: true } })).map((a) => [normalizeName(a.name), { id: a.id, name: a.name }])
+  );
+  const leadBackfillRows = allLeadsForBackfill
+    .filter((l) => l.accountId === null)
+    .map((l) => {
+      const match = l.company ? accountByNormName.get(normalizeName(l.company)) : undefined;
+      return {
+        leadId: l.id,
+        leadName: l.name,
+        company: l.company,
+        matchedAccountId: match?.id ?? null,
+        matchedAccountName: match?.name ?? null,
+        willBackfill: !!match,
+      };
+    });
+  const leadBackfillMatched = leadBackfillRows.filter((r) => r.willBackfill).length;
+  const leadBackfillUnmatched = leadBackfillRows.filter((r) => !r.willBackfill);
+
+  // Phase 3 — AccountProduct
+  const existingAccountProducts = await prisma.accountProduct.findMany({
     where: { accountId: { in: Object.values(KNOWN.accounts) }, productKey: "PLACEPULSE" },
   });
+  const existingByAccount = new Map(existingAccountProducts.map((ap) => [ap.accountId, ap]));
+  const accountProductRows = accounts.map((a) => ({
+    accountId: a.id,
+    accountName: a.name,
+    before: existingByAccount.get(a.id)?.relationshipState ?? null,
+    after: "OPPORTUNITY",
+    willCreate: !existingByAccount.has(a.id),
+  }));
+
+  // Phase 4 — Opportunity types
+  const oppTypeRows = opportunities.map((o) => ({
+    opportunityId: o.id,
+    name: o.name,
+    before: o.type,
+    after: OPP_TYPES[o.id] ?? null,
+    willChange: o.type !== (OPP_TYPES[o.id] ?? o.type),
+  }));
+
+  // Phase 5 — stakeholder links
+  const stakeholderRows = await Promise.all(
+    STAKEHOLDERS.map(async (s) => {
+      const matches = allContacts.filter((c) => normalizeName(`${c.firstName} ${c.lastName}`) === normalizeName(s.contactName));
+      if (matches.length !== 1) {
+        return { ...s, status: matches.length === 0 ? "skipped_not_found" : "skipped_ambiguous", matchCount: matches.length };
+      }
+      const opp = opportunities.find((o) => o.id === s.opportunityId);
+      const alreadyLinked = opp?.contacts.some((oc) => oc.contactId === matches[0].id) ?? false;
+      return {
+        ...s,
+        contactId: matches[0].id,
+        status: alreadyLinked ? "already_linked" : "will_link",
+        isPrimary: false,
+      };
+    })
+  );
+
+  // Phase 6 — excluded
   const activityCount = await prisma.activity.count();
-  const tasksReferencingAndy = tasks.filter(
+
+  // Phase 7 — task cleanup
+  const tasksReferencingAndy = allTasks.filter(
     (t) => t.title.toLowerCase().includes("andy") || (t.notes ?? "").toLowerCase().includes("andy")
   );
 
   return {
-    andyContact: andyContact ? { id: andyContact.id, firstName: andyContact.firstName, lastName: andyContact.lastName } : null,
-    andyLead: andyLead ? { id: andyLead.id, name: andyLead.name } : null,
-    accountsFound: accounts.map((a) => ({ id: a.id, name: a.name })),
-    opportunitiesFound: opportunities.map((o) => ({ id: o.id, name: o.name, type: o.type, contactCount: o.contacts.length })),
-    leadsWithoutAccount,
-    accountProductRowsAlreadyPresent: accountProductCount,
-    accountProductRowsToCreate: 4 - accountProductCount,
-    activityCountBefore: activityCount,
-    tasksReferencingAndy: tasksReferencingAndy.map((t) => ({ id: t.id, title: t.title })),
+    phase1_contact: contactPhase1,
+    phase1_lead: leadPhase1,
+    phase2_leadAccountBackfill: {
+      totalLeadsWithoutAccount: leadBackfillRows.length,
+      willMatch: leadBackfillMatched,
+      unmatched: leadBackfillUnmatched,
+      rows: leadBackfillRows,
+    },
+    phase3_accountProduct: accountProductRows,
+    phase4_opportunityTypes: oppTypeRows,
+    phase5_stakeholderLinks: stakeholderRows,
+    phase6_activities: {
+      status: "EXCLUDED_FROM_EXECUTION",
+      reason: "No verified ATM Dubai 2026 interaction date exists anywhere in the CRM; Activity.date is non-nullable and would default to execution time, misrepresenting historical interactions as happening today.",
+      activityCountBefore: activityCount,
+      proposedButNotExecuted: [
+        "Andrew Gaied / Tourism 365",
+        "Jezael Carrasco / Abu Dhabi Airports",
+        "Oriol Escofet Bueno / Abu Dhabi Airports",
+        "Ishaq Khattak / Sabre",
+        "Muhammad Nasir / Doha Oasis",
+        "Adrian Roodt / Travelport",
+      ],
+    },
+    phase7_taskCleanup: {
+      tasksReferencingAndy: tasksReferencingAndy.map((t) => ({ id: t.id, title: t.title, notes: t.notes })),
+    },
   };
 }
 
@@ -153,15 +243,15 @@ export async function executeSprint03() {
   const report: StepReport[] = [];
 
   await prisma.$transaction(async (tx) => {
-    // ── PHASE 1: Travelport Andy -> Adrian Roodt ──────────────────────────
-    const andyContact = await tx.contact.findUnique({ where: { id: KNOWN.andyContactId } });
-    if (!andyContact) {
-      report.push({ step: "Phase 1 — Contact rename", status: "skipped", detail: `contact ${KNOWN.andyContactId} not found` });
-    } else if (andyContact.firstName === "Adrian" && andyContact.lastName === "Roodt") {
-      report.push({ step: "Phase 1 — Contact rename", status: "already_applied", detail: "already Adrian Roodt" });
+    // ── PHASE 1: Travelport Contact — normalize only if needed ────────────
+    const adrianContact = await tx.contact.findUnique({ where: { id: KNOWN.adrianContactId } });
+    if (!adrianContact) {
+      report.push({ step: "Phase 1 — Contact normalize", status: "skipped", detail: `contact ${KNOWN.adrianContactId} not found` });
+    } else if (isAlreadyAdrianRoodt(adrianContact.firstName, adrianContact.lastName) && adrianContact.firstName === "Adrian" && adrianContact.lastName === "Roodt") {
+      report.push({ step: "Phase 1 — Contact normalize", status: "already_applied", detail: "already exactly 'Adrian Roodt' — no change" });
     } else {
       await tx.contact.update({
-        where: { id: KNOWN.andyContactId },
+        where: { id: KNOWN.adrianContactId },
         data: {
           firstName: "Adrian",
           lastName: "Roodt",
@@ -171,7 +261,11 @@ export async function executeSprint03() {
           relationshipStrength: "ENGAGED",
         },
       });
-      report.push({ step: "Phase 1 — Contact rename", status: "applied", detail: `${KNOWN.andyContactId} renamed 'Andy' -> 'Adrian Roodt', provenance set` });
+      report.push({
+        step: "Phase 1 — Contact normalize",
+        status: "applied",
+        detail: `${KNOWN.adrianContactId} normalized '${adrianContact.firstName} ${adrianContact.lastName}' -> 'Adrian Roodt', provenance set (same ID preserved)`,
+      });
     }
 
     const andyLead = await tx.lead.findUnique({ where: { id: KNOWN.andyLeadId } });
@@ -180,11 +274,8 @@ export async function executeSprint03() {
     } else if (andyLead.name === "Adrian Roodt — Travelport") {
       report.push({ step: "Phase 1 — Lead rename", status: "already_applied", detail: "already renamed" });
     } else {
-      await tx.lead.update({
-        where: { id: KNOWN.andyLeadId },
-        data: { name: "Adrian Roodt — Travelport" },
-      });
-      report.push({ step: "Phase 1 — Lead rename", status: "applied", detail: `${KNOWN.andyLeadId} renamed 'Andy - Travelport' -> 'Adrian Roodt — Travelport'` });
+      await tx.lead.update({ where: { id: KNOWN.andyLeadId }, data: { name: "Adrian Roodt — Travelport" } });
+      report.push({ step: "Phase 1 — Lead rename", status: "applied", detail: `${KNOWN.andyLeadId} renamed '${andyLead.name}' -> 'Adrian Roodt — Travelport' (same ID preserved)` });
     }
 
     // ── PHASE 2: deterministic Lead.accountId backfill ────────────────────
@@ -194,11 +285,7 @@ export async function executeSprint03() {
     let backfilled = 0;
     let unmatched = 0;
     for (const lead of leadsToBackfill) {
-      if (!lead.company) {
-        unmatched++;
-        continue;
-      }
-      const accountId = accountByNormName.get(normalizeName(lead.company));
+      const accountId = lead.company ? accountByNormName.get(normalizeName(lead.company)) : undefined;
       if (!accountId) {
         unmatched++;
         continue;
@@ -226,20 +313,12 @@ export async function executeSprint03() {
         report.push({ step: `Phase 3 — AccountProduct (${account.name})`, status: "already_applied", detail: `relationshipState=${existing.relationshipState}` });
         continue;
       }
-      await tx.accountProduct.create({
-        data: { accountId, productKey: "PLACEPULSE", relationshipState: "OPPORTUNITY" },
-      });
+      await tx.accountProduct.create({ data: { accountId, productKey: "PLACEPULSE", relationshipState: "OPPORTUNITY" } });
       report.push({ step: `Phase 3 — AccountProduct (${account.name})`, status: "applied", detail: "created, relationshipState=OPPORTUNITY" });
     }
 
     // ── PHASE 4: Opportunity types ─────────────────────────────────────────
-    const oppTypes: Record<string, string> = {
-      [KNOWN.opportunities.sabre]: "STRATEGIC_PARTNERSHIP",
-      [KNOWN.opportunities.tourism365]: "COMMERCIAL",
-      [KNOWN.opportunities.abuDhabiAirports]: "COMMERCIAL",
-      [KNOWN.opportunities.dohaOasis]: "COMMERCIAL",
-    };
-    for (const [oppId, type] of Object.entries(oppTypes)) {
+    for (const [oppId, type] of Object.entries(OPP_TYPES)) {
       const opp = await tx.opportunity.findUnique({ where: { id: oppId } });
       if (!opp) {
         report.push({ step: `Phase 4 — Opportunity type (${oppId})`, status: "skipped", detail: "opportunity not found" });
@@ -254,81 +333,31 @@ export async function executeSprint03() {
     }
 
     // ── PHASE 5: stakeholder linking (existing contacts only) ─────────────
-    await linkStakeholder(tx, report, "Tourism 365", KNOWN.opportunities.tourism365, "Andrew Gaied", false);
-    await linkStakeholder(tx, report, "Abu Dhabi Airports", KNOWN.opportunities.abuDhabiAirports, "Jezael Carrasco", false);
-    await linkStakeholder(tx, report, "Abu Dhabi Airports", KNOWN.opportunities.abuDhabiAirports, "Oriol Escofet Bueno", false);
-    await linkStakeholder(tx, report, "Sabre", KNOWN.opportunities.sabre, "Ishaq Khattak", false);
-    await linkStakeholder(tx, report, "Doha Oasis", KNOWN.opportunities.dohaOasis, "Muhammad Nasir", false);
+    for (const s of STAKEHOLDERS) {
+      await linkStakeholder(tx, report, s);
+    }
 
-    // ── PHASE 6: historical activity baseline ──────────────────────────────
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Andrew Gaied / Tourism 365",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Andrew Gaied, Tourism 365",
-      notes: "Personally met at ATM Dubai 2026. Strong PlacePulse discussion/demo. Andrew referred Piero to Rebin Baby (not yet a CRM record).",
-      accountId: KNOWN.accounts.tourism365,
-      contactName: "Andrew Gaied",
-      opportunityId: KNOWN.opportunities.tourism365,
-    });
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Jezael Carrasco / Abu Dhabi Airports",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Jezael Carrasco, Abu Dhabi Airports",
-      notes: "Personally met at ATM Dubai 2026. Strong PlacePulse/location-intelligence discussion. Follow-up interest expressed.",
-      accountId: KNOWN.accounts.abuDhabiAirports,
-      contactName: "Jezael Carrasco",
-      opportunityId: KNOWN.opportunities.abuDhabiAirports,
-    });
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Oriol Escofet Bueno / Abu Dhabi Airports",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Oriol Escofet Bueno, Abu Dhabi Airports",
-      notes: "Personally met at ATM Dubai 2026, part of the same Abu Dhabi Airports discussion as Jezael Carrasco.",
-      accountId: KNOWN.accounts.abuDhabiAirports,
-      contactName: "Oriol Escofet Bueno",
-      opportunityId: KNOWN.opportunities.abuDhabiAirports,
-    });
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Ishaq Khattak / Sabre",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Ishaq Khattak, Sabre",
-      notes: "Personally engaged in strategic PlacePulse partnership discussion. An existing task references a Bahrain Airport introduction.",
-      accountId: KNOWN.accounts.sabre,
-      contactName: "Ishaq Khattak",
-      opportunityId: KNOWN.opportunities.sabre,
-    });
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Muhammad Nasir / Doha Oasis",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Muhammad Nasir, Doha Oasis",
-      notes: "Personally engaged around PlacePulse destination intelligence. An existing task references a detailed demo post-show.",
-      accountId: KNOWN.accounts.dohaOasis,
-      contactName: "Muhammad Nasir",
-      opportunityId: KNOWN.opportunities.dohaOasis,
-    });
-    await ensureActivity(tx, report, {
-      label: "Phase 6 — Activity: Adrian Roodt / Travelport",
-      type: "EVENT_INTERACTION",
-      subject: "ATM Dubai 2026 — Adrian Roodt, Travelport",
-      notes:
-        "Personally met at ATM Dubai 2026. Substantive strategic partnership/ecosystem discussion. Adrian wanted to introduce Piero to relevant partners at the stand; those partners were unavailable at the time, and Piero intended to return but did not manage to reconnect.",
-      accountId: KNOWN.travelportAccountId,
-      contactName: "Adrian Roodt",
-      leadId: KNOWN.andyLeadId,
+    // ── PHASE 6: historical Activity baseline — EXCLUDED ───────────────────
+    report.push({
+      step: "Phase 6 — Historical activities",
+      status: "skipped",
+      detail: "Excluded from this execution: no verified ATM Dubai 2026 interaction date exists in the CRM, and Activity.date would otherwise default to execution time.",
     });
 
     // ── PHASE 7: existing task cleanup (Andy references only) ─────────────
     const tasks = await tx.task.findMany();
+    let anyTaskFixed = false;
     for (const t of tasks) {
       const titleHasAndy = t.title.toLowerCase().includes("andy");
       const notesHasAndy = (t.notes ?? "").toLowerCase().includes("andy");
       if (!titleHasAndy && !notesHasAndy) continue;
+      anyTaskFixed = true;
       const newTitle = t.title.replace(/Andy(\s*-\s*Travelport)?/gi, "Adrian Roodt");
       const newNotes = t.notes ? t.notes.replace(/Andy(\s*-\s*Travelport)?/gi, "Adrian Roodt") : t.notes;
       await tx.task.update({ where: { id: t.id }, data: { title: newTitle, notes: newNotes } });
       report.push({ step: `Phase 7 — Task cleanup (${t.id})`, status: "applied", detail: `'Andy' reference corrected to 'Adrian Roodt' — title: "${newTitle}"` });
     }
-    if (!tasks.some((t) => t.title.toLowerCase().includes("andy") || (t.notes ?? "").toLowerCase().includes("andy"))) {
+    if (!anyTaskFixed) {
       report.push({ step: "Phase 7 — Task cleanup", status: "already_applied", detail: "no task currently references 'Andy'" });
     }
   });
