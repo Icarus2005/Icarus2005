@@ -6,6 +6,7 @@ import CopyAuditButton from "./CopyAuditButton";
 import Sprint03Panel from "./Sprint03Panel";
 import Sprint04Panel from "./Sprint04Panel";
 import Sprint05Panel from "./Sprint05Panel";
+import Sprint05ExecutePanel from "./Sprint05ExecutePanel";
 
 // Internal read-only production diagnostic. No database mutation paths exist
 // on this page or in src/lib/dataAudit.ts — every query is a Prisma
@@ -204,6 +205,10 @@ export default async function DataAuditPage() {
 
       <div className="mt-6">
         <Sprint05Panel />
+      </div>
+
+      <div className="mt-6">
+        <Sprint05ExecutePanel />
       </div>
 
       <div className="mt-6">
