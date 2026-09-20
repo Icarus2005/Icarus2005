@@ -22,8 +22,24 @@ function NewActivityPageForm() {
   const [leads, setLeads] = useState<{ id: string; name: string; company: string | null }[]>([]);
   const [leadId, setLeadId] = useState(prefillLeadId);
   const [opportunityId, setOpportunityId] = useState(prefillOpportunityId);
+  // Controlled (not defaultValue) because options load asynchronously —
+  // defaultValue is only applied at mount, so it silently fails to prefill
+  // once the option list arrives after the initial render.
+  const [accountId, setAccountId] = useState(prefillAccountId);
+  const [contactId, setContactId] = useState(prefillContactId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Optional follow-up task, created only if the checkbox is selected — kept
+  // as separate React state rather than named form fields, since it posts
+  // to a different endpoint (/api/tasks) and must never collide with the
+  // Activity form's own `ownerId` field in the same FormData submission.
+  const [createTask, setCreateTask] = useState(false);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskClientCommitmentDate, setTaskClientCommitmentDate] = useState("");
+  const [taskOwnerId, setTaskOwnerId] = useState("");
+  const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
 
   // Product inherits from the linked lead/opportunity automatically.
   const productInherited = Boolean(leadId || opportunityId);
@@ -42,6 +58,13 @@ function NewActivityPageForm() {
     });
   }, []);
 
+  useEffect(() => {
+    fetch("/api/team")
+      .then((r) => r.json())
+      .then((list: { id: string; name: string; active: boolean }[]) => setOwners(list.filter((m) => m.active)))
+      .catch(() => {});
+  }, []);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
@@ -54,6 +77,25 @@ function NewActivityPageForm() {
       body: JSON.stringify(body),
     });
     if (res.ok) {
+      // Optional follow-up task — only created when the checkbox is
+      // explicitly selected, never as a side effect of logging the
+      // Activity. Linked to the same Account/Contact/Lead/Opportunity
+      // context the Activity itself was just linked to.
+      if (createTask && taskTitle.trim()) {
+        const taskBody: Record<string, string> = { title: taskTitle };
+        if (taskDueDate) taskBody.dueDate = taskDueDate;
+        if (taskClientCommitmentDate) taskBody.clientCommitmentDate = taskClientCommitmentDate;
+        if (taskOwnerId) taskBody.ownerId = taskOwnerId;
+        if (typeof body.accountId === "string") taskBody.accountId = body.accountId;
+        if (typeof body.contactId === "string") taskBody.contactId = body.contactId;
+        if (typeof body.leadId === "string") taskBody.leadId = body.leadId;
+        if (typeof body.opportunityId === "string") taskBody.opportunityId = body.opportunityId;
+        await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(taskBody),
+        });
+      }
       // Navigate back contextually
       if (prefillLeadId) router.push(`/leads/${prefillLeadId}`);
       else if (prefillOpportunityId) router.push(`/opportunities/${prefillOpportunityId}`);
@@ -115,7 +157,7 @@ function NewActivityPageForm() {
 
         <div>
           <label className="label">Account</label>
-          <select name="accountId" defaultValue={prefillAccountId} className="input">
+          <select name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input">
             <option value="">Select account...</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
@@ -125,7 +167,7 @@ function NewActivityPageForm() {
 
         <div>
           <label className="label">Contact</label>
-          <select name="contactId" defaultValue={prefillContactId} className="input">
+          <select name="contactId" value={contactId} onChange={(e) => setContactId(e.target.value)} className="input">
             <option value="">Select contact...</option>
             {contacts.map((c) => (
               <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
@@ -168,6 +210,63 @@ function NewActivityPageForm() {
         <div>
           <label className="label">Notes</label>
           <textarea name="notes" rows={4} className="input resize-none" placeholder="Meeting notes, key takeaways, next steps..." />
+        </div>
+
+        <div className="border-t border-gray-100 pt-4">
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={createTask}
+              onChange={(e) => setCreateTask(e.target.checked)}
+              className="accent-brand-600"
+            />
+            Create follow-up task
+          </label>
+          {createTask && (
+            <div className="mt-3 space-y-4 bg-gray-50 border border-gray-100 rounded-xl p-4">
+              <div>
+                <label className="label">Task Title *</label>
+                <input
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  required={createTask}
+                  className="input"
+                  placeholder="e.g. Send proposal follow-up"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Due Date</label>
+                  <input
+                    type="date"
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="input"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Internal follow-up target — not a date the client agreed to.</p>
+                </div>
+                <div>
+                  <label className="label">Client Commitment Date</label>
+                  <input
+                    type="date"
+                    value={taskClientCommitmentDate}
+                    onChange={(e) => setTaskClientCommitmentDate(e.target.value)}
+                    className="input"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Only if the client actually agreed to a date.</p>
+                </div>
+              </div>
+              <div>
+                <label className="label">Task Owner</label>
+                <select value={taskOwnerId} onChange={(e) => setTaskOwnerId(e.target.value)} className="input">
+                  <option value="">Unassigned</option>
+                  {owners.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">

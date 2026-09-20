@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  CONTACT_ROLES, ACTIVITY_TYPES, USE_CASES, marketLabels, stageColor,
+  CONTACT_ROLES, USE_CASES, marketLabels, stageColor,
 } from "@/lib/constants";
 import { HEALTH_STATUSES, HEALTH_COLORS } from "@/lib/products";
 import { fmtDate, isOverdue, daysSince } from "@/lib/format";
 import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
+import Timeline from "@/components/Timeline";
 
 async function getOpportunity(id: string) {
   return prisma.opportunity.findUnique({
@@ -36,6 +37,7 @@ function fmt(n: number) {
 export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
   const opp = await getOpportunity(params.id);
   if (!opp) notFound();
+  const primaryStakeholder = opp.contacts.find((c) => c.isPrimary)?.contact ?? null;
 
   return (
     <div className="p-8">
@@ -156,39 +158,13 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-semibold text-gray-700">Activity</h2>
             <Link
-              href={`/activities/new?opportunityId=${opp.id}&accountId=${opp.accountId}`}
+              href={`/activities/new?opportunityId=${opp.id}&accountId=${opp.accountId}${primaryStakeholder ? `&contactId=${primaryStakeholder.id}` : ""}`}
               className="text-xs text-brand-600 hover:underline"
             >
               + Log Activity
             </Link>
           </div>
-          {opp.activities.length === 0 && (
-            <p className="text-sm text-gray-400">No activities logged.</p>
-          )}
-          <div className="space-y-3">
-            {opp.activities.map((act) => (
-              <div key={act.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
-                  {act.type[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{act.subject}</p>
-                  {act.notes && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{act.notes}</p>}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400">{ACTIVITY_TYPES[act.type]}</span>
-                    {act.contact && (
-                      <span className="text-xs text-gray-400">
-                        · {act.contact.firstName} {act.contact.lastName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-gray-400 shrink-0">
-                  {new Date(act.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <Timeline activities={opp.activities} />
         </div>
       </div>
     </div>

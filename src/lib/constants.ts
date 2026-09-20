@@ -293,9 +293,23 @@ export const ACTIVITY_TYPES: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   LINKEDIN: "LinkedIn",
   DEMO: "Demo",
-  EVENT_INTERACTION: "Event Interaction",
+  EVENT_INTERACTION: "Event",
+  REFERRAL: "Referral",
   NOTE: "Note",
   OTHER: "Other",
+};
+
+export const ACTIVITY_TYPE_COLORS: Record<string, string> = {
+  MEETING: "bg-blue-100 text-blue-700",
+  CALL: "bg-green-100 text-green-700",
+  EMAIL: "bg-yellow-100 text-yellow-700",
+  WHATSAPP: "bg-emerald-100 text-emerald-700",
+  LINKEDIN: "bg-sky-100 text-sky-700",
+  DEMO: "bg-purple-100 text-purple-700",
+  EVENT_INTERACTION: "bg-indigo-100 text-indigo-700",
+  REFERRAL: "bg-amber-100 text-amber-700",
+  NOTE: "bg-gray-100 text-gray-700",
+  OTHER: "bg-gray-100 text-gray-500",
 };
 
 export const TASK_STATUSES: Record<string, string> = {

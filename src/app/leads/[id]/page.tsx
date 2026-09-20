@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
-  LEAD_STATUSES, LEAD_STATUS_COLORS, LEAD_SOURCES, USE_CASES, ACTIVITY_TYPES, marketLabels,
+  LEAD_STATUSES, LEAD_STATUS_COLORS, LEAD_SOURCES, USE_CASES, marketLabels,
 } from "@/lib/constants";
 import { SALES_MOTIONS, parseProductList } from "@/lib/products";
 import { fmtMoney, fmtDate, isOverdue } from "@/lib/format";
 import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
+import Timeline from "@/components/Timeline";
 import ConvertLeadButton from "./ConvertLeadButton";
 
 async function getLead(id: string) {
@@ -175,26 +176,14 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         <div className="card p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-semibold text-gray-700">Activity</h2>
-            <Link href={`/activities/new?leadId=${lead.id}`} className="text-xs text-brand-600 hover:underline">+ Log</Link>
+            <Link
+              href={`/activities/new?leadId=${lead.id}${lead.accountId ? `&accountId=${lead.accountId}` : ""}${lead.primaryContactId ? `&contactId=${lead.primaryContactId}` : ""}`}
+              className="text-xs text-brand-600 hover:underline"
+            >
+              + Log
+            </Link>
           </div>
-          {lead.activities.length === 0 && <p className="text-sm text-gray-400">No activities logged.</p>}
-          <div className="space-y-3">
-            {lead.activities.map((act) => (
-              <div key={act.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
-                  {act.type[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{act.subject}</p>
-                  {act.notes && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{act.notes}</p>}
-                  <span className="text-xs text-gray-400">{ACTIVITY_TYPES[act.type]}</span>
-                </div>
-                <span className="text-xs text-gray-400 shrink-0">
-                  {new Date(act.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <Timeline activities={lead.activities} />
         </div>
       </div>
     </div>

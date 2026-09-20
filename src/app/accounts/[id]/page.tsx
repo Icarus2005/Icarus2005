@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   GCC_COUNTRIES, SECTORS, COMPANY_SIZES, CONTACT_ROLES,
-  ACCOUNT_TIERS, ACTIVITY_TYPES, stageColor,
+  ACCOUNT_TIERS, stageColor,
 } from "@/lib/constants";
 import { ALL_PRODUCT_KEYS, PRODUCTS_META } from "@/lib/products";
 import { fmtMoney as fmt } from "@/lib/format";
 import ProductBadge from "@/components/ProductBadge";
+import Timeline from "@/components/Timeline";
 
 async function getAccount(id: string) {
   return prisma.account.findUnique({
@@ -246,43 +247,7 @@ export default async function AccountDetailPage({
               + Log Activity
             </Link>
           </div>
-          {account.activities.length === 0 && (
-            <p className="text-sm text-gray-400">No activities logged yet.</p>
-          )}
-          <div className="space-y-3">
-            {account.activities.map((act) => (
-              <div key={act.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
-                  {act.type[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{act.subject}</p>
-                  {act.notes && (
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{act.notes}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400">{ACTIVITY_TYPES[act.type]}</span>
-                    {act.contact && (
-                      <span className="text-xs text-gray-400">
-                        · {act.contact.firstName} {act.contact.lastName}
-                      </span>
-                    )}
-                    {act.opportunity && (
-                      <Link
-                        href={`/opportunities/${act.opportunity.id}`}
-                        className="text-xs text-brand-600 hover:underline"
-                      >
-                        · {act.opportunity.name}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-gray-400 shrink-0">
-                  {new Date(act.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <Timeline activities={account.activities} />
         </div>
       </div>
     </div>
