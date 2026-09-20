@@ -9,6 +9,7 @@ import { fmtMoney, fmtDate, isOverdue } from "@/lib/format";
 import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
 import Timeline from "@/components/Timeline";
+import SalesCopilotPanel from "@/components/SalesCopilotPanel";
 import ConvertLeadButton from "./ConvertLeadButton";
 
 async function getLead(id: string) {
@@ -147,6 +148,14 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           <p className="text-sm text-gray-700 whitespace-pre-line">{lead.notes}</p>
         </div>
       )}
+
+      <div className="mb-8">
+        <SalesCopilotPanel
+          entityType="LEAD"
+          entityId={lead.id}
+          relatedIds={{ leadId: lead.id, accountId: lead.accountId, contactId: lead.primaryContactId }}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tasks */}

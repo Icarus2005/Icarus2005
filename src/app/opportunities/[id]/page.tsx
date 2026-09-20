@@ -9,6 +9,7 @@ import { fmtDate, isOverdue, daysSince } from "@/lib/format";
 import { deriveNextInteraction } from "@/lib/nextInteraction";
 import ProductBadge from "@/components/ProductBadge";
 import Timeline from "@/components/Timeline";
+import SalesCopilotPanel from "@/components/SalesCopilotPanel";
 
 async function getOpportunity(id: string) {
   return prisma.opportunity.findUnique({
@@ -122,6 +123,14 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               : "—"}
           </p>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <SalesCopilotPanel
+          entityType="OPPORTUNITY"
+          entityId={opp.id}
+          relatedIds={{ opportunityId: opp.id, accountId: opp.accountId, contactId: primaryStakeholder?.id }}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CONTACT_ROLES, stageColor } from "@/lib/constants";
 import ProductBadge from "@/components/ProductBadge";
 import Timeline from "@/components/Timeline";
+import SalesCopilotPanel from "@/components/SalesCopilotPanel";
 
 async function getContact(id: string) {
   return prisma.contact.findUnique({
@@ -72,6 +73,14 @@ export default async function ContactDetailPage({ params }: { params: { id: stri
           </div>
         </div>
         <Link href={`/contacts/${contact.id}/edit`} className="btn-secondary">Edit</Link>
+      </div>
+
+      <div className="mb-8">
+        <SalesCopilotPanel
+          entityType="CONTACT"
+          entityId={contact.id}
+          relatedIds={{ contactId: contact.id, accountId: contact.accountId }}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
