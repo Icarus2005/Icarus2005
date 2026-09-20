@@ -3,9 +3,14 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mic, Check } from "lucide-react";
+import { Mic, Check, Camera, Upload, Sparkles } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey, type ProductKey } from "@/lib/products";
 import { CAPTURE_ACQUISITION_OPTIONS, type CaptureAcquisitionKey } from "@/lib/capture/eventCapture";
+
+const ALLOWED_CARD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_CARD_IMAGE_BYTES = 4 * 1024 * 1024;
+
+type CardConfidence = Partial<Record<"fullName" | "company" | "jobTitle" | "email" | "phone" | "linkedinUrl", "high" | "medium" | "low">>;
 
 /**
  * Quick Capture — event-capture MVP (Sprint 06E).
@@ -54,6 +59,15 @@ function CaptureEventForm() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null);
 
+  // Business card capture (Sprint 06E.1)
+  const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+  const [extractedBanner, setExtractedBanner] = useState(false);
+  const [confidence, setConfidence] = useState<CardConfidence>({});
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     setIdempotencyKey(crypto.randomUUID());
   }, []);
@@ -73,6 +87,58 @@ function CaptureEventForm() {
     setConflict(null);
     setSaved(null);
     setIdempotencyKey(crypto.randomUUID());
+    removeCard();
+  }
+
+  function removeCard() {
+    if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
+    setCardPreviewUrl(null);
+    setExtractError("");
+    setExtractedBanner(false);
+    setConfidence({});
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+  }
+
+  async function handleCardFile(file: File | undefined) {
+    if (!file || extracting) return; // guard against a second selection firing mid-extraction
+    setExtractError("");
+    setExtractedBanner(false);
+    if (!ALLOWED_CARD_TYPES.includes(file.type)) {
+      setExtractError("Unsupported image type. Use JPEG, PNG, or WebP.");
+      return;
+    }
+    if (file.size > MAX_CARD_IMAGE_BYTES) {
+      setExtractError("Image is too large (max 4MB).");
+      return;
+    }
+
+    if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
+    setCardPreviewUrl(URL.createObjectURL(file));
+    setExtracting(true);
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await fetch("/api/capture/card-extract", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setExtractError(data.error ?? "Could not extract card details.");
+        return;
+      }
+      // Populate only fields the user hasn't already filled in.
+      setFullName((prev) => prev || data.fullName || "");
+      setCompany((prev) => prev || data.company || "");
+      setJobTitle((prev) => prev || data.jobTitle || "");
+      setEmail((prev) => prev || data.email || "");
+      setPhone((prev) => prev || data.phone || "");
+      setLinkedin((prev) => prev || data.linkedinUrl || "");
+      setConfidence(data.confidence ?? {});
+      setExtractedBanner(true);
+    } catch {
+      setExtractError("Network error — the card wasn't extracted. Your existing entries are unchanged.");
+    } finally {
+      setExtracting(false);
+    }
   }
 
   function toggleDictation() {
@@ -177,6 +243,53 @@ function CaptureEventForm() {
         <input value={eventName} onChange={(e) => setEventName(e.target.value)} className="input py-3 text-base" />
       </div>
 
+      <div className="card p-4 mb-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Business card</p>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => handleCardFile(e.target.files?.[0])}
+        />
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => handleCardFile(e.target.files?.[0])}
+        />
+
+        {cardPreviewUrl ? (
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={cardPreviewUrl} alt="Business card preview" className="w-20 h-20 object-cover rounded-lg border border-gray-200 shrink-0" />
+            <div className="flex-1 min-w-0">
+              {extracting && <p className="text-sm text-gray-500">Extracting…</p>}
+              {!extracting && extractedBanner && (
+                <p className="text-sm text-green-700 flex items-center gap-1"><Sparkles size={13} aria-hidden /> Card details extracted — review before saving.</p>
+              )}
+              {!extracting && extractError && <p className="text-sm text-red-600">{extractError}</p>}
+              <div className="flex gap-3 mt-1">
+                <button onClick={() => uploadInputRef.current?.click()} disabled={extracting} className="text-xs text-brand-600 hover:underline disabled:opacity-50">Replace</button>
+                <button onClick={removeCard} disabled={extracting} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50">Remove</button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => cameraInputRef.current?.click()} disabled={extracting} className="py-3 px-3 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 flex items-center justify-center gap-1.5 disabled:opacity-50">
+              <Camera size={15} aria-hidden /> Take photo
+            </button>
+            <button onClick={() => uploadInputRef.current?.click()} disabled={extracting} className="py-3 px-3 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 flex items-center justify-center gap-1.5 disabled:opacity-50">
+              <Upload size={15} aria-hidden /> Upload image
+            </button>
+          </div>
+        )}
+        {!cardPreviewUrl && extractError && <p className="text-sm text-red-600">{extractError}</p>}
+      </div>
+
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg mb-4">{error}</div>}
 
       {conflict && (
@@ -196,12 +309,21 @@ function CaptureEventForm() {
 
       <div className="card p-4 mb-4 space-y-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Person</p>
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name *" className="input py-3 text-base" />
-        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company *" className="input py-3 text-base" />
-        <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Job title" className="input py-3 text-base" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="input py-3 text-base" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" type="tel" className="input py-3 text-base" />
-        <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="LinkedIn URL" className="input py-3 text-base" />
+        {([
+          ["fullName", fullName, setFullName, "Full name *", "text"],
+          ["company", company, setCompany, "Company *", "text"],
+          ["jobTitle", jobTitle, setJobTitle, "Job title", "text"],
+          ["email", email, setEmail, "Email", "email"],
+          ["phone", phone, setPhone, "Phone", "tel"],
+          ["linkedinUrl", linkedin, setLinkedin, "LinkedIn URL", "text"],
+        ] as const).map(([key, value, setter, placeholder, type]) => (
+          <div key={key}>
+            <input value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder} type={type} className="input py-3 text-base" />
+            {confidence[key] === "low" && (
+              <p className="text-[11px] text-amber-600 mt-0.5">Low-confidence extraction — double-check this field.</p>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="card p-4 mb-4 space-y-3">

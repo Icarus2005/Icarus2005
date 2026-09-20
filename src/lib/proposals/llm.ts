@@ -70,6 +70,67 @@ export async function complete(opts: {
   }
 }
 
+/**
+ * Vision variant of complete() — same client, same fallback semantics
+ * (returns null when no key is configured or the call fails), extended
+ * with a single image content block. Added for Sprint 06E.1 business-card
+ * extraction; does not change complete()'s behavior for any existing
+ * caller.
+ */
+export async function completeVision(opts: {
+  model: string;
+  system: string;
+  prompt: string;
+  imageBase64: string;
+  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  maxTokens?: number;
+}): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 1000,
+        system: opts.system,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: opts.mediaType, data: opts.imageBase64 } },
+              { type: "text", text: opts.prompt },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!res.ok) {
+      // Never log the request body — it contains the image.
+      console.error(`Anthropic vision request failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    const text = (data.content ?? [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("")
+      .trim();
+    return text || null;
+  } catch (err) {
+    console.error("Anthropic vision request errored:", err);
+    return null;
+  }
+}
+
 /** Extracts the first JSON object from a model response. */
 export function parseJsonBlock<T>(text: string | null): T | null {
   if (!text) return null;
