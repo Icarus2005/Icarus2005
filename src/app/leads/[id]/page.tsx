@@ -162,7 +162,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                   {t.title}
                 </span>
                 {t.dueDate && (
-                  <span className={`text-xs ${t.status !== "DONE" && new Date(t.dueDate) < new Date() ? "text-red-600 font-semibold" : "text-gray-400"}`}>
+                  <span className={`text-xs ${t.status !== "DONE" && isOverdue(t.dueDate) ? "text-red-600 font-semibold" : "text-gray-400"}`}>
                     {new Date(t.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                   </span>
                 )}

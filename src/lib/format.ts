@@ -19,6 +19,12 @@ export function daysSince(d: Date | string | null | undefined): number | null {
   return Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000));
 }
 
+// Every date this helper is asked about (Task.dueDate, Lead/Opportunity
+// nextActionDate) is an internal ArqOne calendar-day target, not a precise
+// timestamp — see src/lib/dubaiTime.ts for why "overdue" means the Asia/
+// Dubai calendar day has fully passed, not "before the current instant".
+import { isOverdueDubai } from "./dubaiTime";
+
 export function isOverdue(d: Date | string | null | undefined): boolean {
-  return !!d && new Date(d).getTime() < Date.now();
+  return isOverdueDubai(d);
 }

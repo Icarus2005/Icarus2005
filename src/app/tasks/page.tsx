@@ -8,6 +8,8 @@ import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
 import { inheritedProduct } from "@/lib/products";
 import { TASK_PRIORITIES, TASK_PRIORITY_COLORS } from "@/lib/constants";
+import { startOfDubaiDay, addDubaiDays } from "@/lib/dubaiTime";
+import { isOverdue } from "@/lib/format";
 
 type Task = {
   id: string;
@@ -31,11 +33,13 @@ type Bucket = { label: string; tasks: Task[] };
 
 function bucketize(tasks: Task[]): Bucket[] {
   const now = new Date();
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const today = startOfDay(now);
-  const tomorrow = new Date(today.getTime() + 86_400_000);
-  const dayAfter = new Date(tomorrow.getTime() + 86_400_000);
-  const weekEnd = new Date(today.getTime() + 7 * 86_400_000);
+  // Bucket boundaries are Asia/Dubai calendar days, not the viewer's local
+  // browser timezone — this CRM's dates are ArqOne-internal Dubai targets
+  // regardless of where the page is opened from.
+  const today = startOfDubaiDay(now);
+  const tomorrow = addDubaiDays(today, 1);
+  const dayAfter = addDubaiDays(today, 2);
+  const weekEnd = addDubaiDays(today, 7);
 
   const buckets: Record<string, Task[]> = {
     Overdue: [], Today: [], Tomorrow: [], "This Week": [], Later: [], "No due date": [], Completed: [],
@@ -44,7 +48,10 @@ function bucketize(tasks: Task[]): Bucket[] {
     if (t.status === "DONE") { buckets.Completed.push(t); continue; }
     if (!t.dueDate) { buckets["No due date"].push(t); continue; }
     const due = new Date(t.dueDate);
-    if (due < today) buckets.Overdue.push(t);
+    // Overdue = the task's Dubai calendar day has fully passed — not "due
+    // before the exact current instant" — so a task due today never shows
+    // as overdue on the day it's due.
+    if (isOverdue(due)) buckets.Overdue.push(t);
     else if (due < tomorrow) buckets.Today.push(t);
     else if (due < dayAfter) buckets.Tomorrow.push(t);
     else if (due < weekEnd) buckets["This Week"].push(t);
@@ -205,7 +212,7 @@ function TasksPageInner() {
             </h2>
             <div className="space-y-2">
               {bucket.tasks.map((task) => {
-                const overdue = task.status === "OPEN" && task.dueDate && new Date(task.dueDate) < now;
+                const overdue = task.status === "OPEN" && isOverdue(task.dueDate);
                 return (
                   <div key={task.id} className={`card p-4 flex items-start gap-3 ${overdue ? "border-l-4 border-l-red-500" : ""}`}>
                     <input

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { isOverdue } from "./format";
 
 // Internal, read-only production diagnostic. Every query here is a plain
 // SELECT (Prisma find/count/groupBy) — this module must never call
@@ -31,7 +32,6 @@ function matchesTravelport(...fields: (string | null | undefined)[]): boolean {
 
 export async function getDataAudit() {
   const generatedAt = new Date().toISOString();
-  const now = new Date();
 
   const [accounts, contacts, leads, opportunities, activities, tasks, accountProducts] =
     await Promise.all([
@@ -203,7 +203,7 @@ export async function getDataAudit() {
   // ─── TASKS ───────────────────────────────────────────────────────────────
   const taskStatusDistribution = groupCount(tasks, (t) => t.status);
   const tasksNoDueDate = tasks.filter((t) => !t.dueDate);
-  const tasksOverdue = tasks.filter((t) => t.status === "OPEN" && t.dueDate && new Date(t.dueDate) < now);
+  const tasksOverdue = tasks.filter((t) => t.status === "OPEN" && isOverdue(t.dueDate));
   const orphanTasks = tasks.filter((t) => !t.leadId && !t.accountId && !t.contactId && !t.opportunityId);
 
   // ─── ACTIVITIES ──────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ import {
 } from "@/lib/products";
 import { leadProductWhere, oppProductWhere, taskProductWhere, activityProductWhere } from "@/lib/filters";
 import { fmtMoney, fmtDate } from "@/lib/format";
+import { startOfDubaiDay } from "@/lib/dubaiTime";
 import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
 
@@ -42,7 +43,11 @@ async function getDashboardData(product: string) {
     prisma.task.findMany({
       where: {
         AND: [
-          { status: "OPEN", dueDate: { lt: now } },
+          // Overdue means the task's Asia/Dubai calendar day has fully
+          // passed — compare against the start of TODAY's Dubai day, not
+          // the exact current instant, so a task due "today" never shows
+          // as overdue on the same day it's due.
+          { status: "OPEN", dueDate: { lt: startOfDubaiDay(now) } },
           taskProductWhere(product),
         ],
       },
