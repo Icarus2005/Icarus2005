@@ -11,6 +11,12 @@ describe("product validation", () => {
     assert.ok(BUSINESS_LINES.includes("PLACEPULSE"));
   });
 
+  test("SalesX is a canonical product key and a valid business line", () => {
+    assert.ok(isProductKey("SALESX"));
+    assert.ok(BUSINESS_LINES.includes("SALESX"));
+    assert.equal(isProductKey("SalesX"), false, "canonical keys are case-sensitive — the label is SalesX, the key is SALESX");
+  });
+
   test("rejects unknown, empty and null product values", () => {
     assert.equal(isProductKey("NOT_A_PRODUCT"), false);
     assert.equal(isProductKey(""), false);

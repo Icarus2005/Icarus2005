@@ -23,6 +23,7 @@ import {
   FileSignature,
   ShieldCheck,
   Zap,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey } from "@/lib/products";
@@ -55,6 +56,7 @@ const SYSTEM_NAV: NavItem[] = [
 
 const PRODUCT_ICONS: Record<string, LucideIcon> = {
   PLACEPULSE: MapPin,
+  SALESX: TrendingUp,
   PLYMIO: GraduationCap,
   AI_NAVIGATOR: Compass,
   ADVISORY: Briefcase,

@@ -22,13 +22,16 @@ does **not** map 1:1 to the ArqOne Labs portfolio's platform list. Canonical
 product keys stored in the database are:
 
 - `PLACEPULSE`
+- `SALESX`
 - `PLYMIO`
 - `AI_NAVIGATOR`
 - `ADVISORY`
 - `UNASSIGNED`
 
-Do not assume BrandSprk / ShieldPilot / SalesX / TWIIN map into this schema —
-they don't currently exist as product keys here.
+Do not assume BrandSprk / ShieldPilot / TWIIN map into this schema — they
+don't currently exist as product keys here. `SALESX` was added as a
+canonical key once SalesX became an active ArqOne priority product; it is
+not a legacy carry-over from the portfolio's platform list.
 
 ## Stack
 

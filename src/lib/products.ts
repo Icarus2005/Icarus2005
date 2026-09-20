@@ -4,6 +4,7 @@
 
 export const PRODUCT_KEYS = [
   "PLACEPULSE",
+  "SALESX",
   "PLYMIO",
   "AI_NAVIGATOR",
   "ADVISORY",
@@ -34,6 +35,16 @@ export const PRODUCTS_META: Record<ProductKey, ProductMeta> = {
     dot: "bg-brand-500",
     text: "text-brand-600",
     soft: "bg-brand-50",
+  },
+  SALESX: {
+    key: "SALESX",
+    label: "SalesX",
+    slug: "salesx",
+    description: "AI-powered sales agents",
+    badge: "bg-rose-100 text-rose-700",
+    dot: "bg-rose-500",
+    text: "text-rose-600",
+    soft: "bg-rose-50",
   },
   PLYMIO: {
     key: "PLYMIO",
@@ -80,6 +91,7 @@ export const PRODUCTS_META: Record<ProductKey, ProductMeta> = {
 // Business lines shown in navigation / selectors (ordered), excluding UNASSIGNED
 export const BUSINESS_LINES: ProductKey[] = [
   "PLACEPULSE",
+  "SALESX",
   "PLYMIO",
   "AI_NAVIGATOR",
   "ADVISORY",
@@ -186,6 +198,21 @@ export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
       { key: "DISCOVERY", name: "Discovery", probability: 25 },
       { key: "DATA_SCOPING", name: "Evidence & Data Scoping", probability: 35 },
       { key: "PILOT", name: "Pilot / POC", probability: 50 },
+      { key: "PROPOSAL", name: "Proposal", probability: 65 },
+      { key: "NEGOTIATION", name: "Negotiation", probability: 80 },
+      ...CLOSED,
+    ],
+  },
+  {
+    id: "pl_salesx",
+    name: "SalesX Sales",
+    productKey: "SALESX",
+    stages: [
+      { key: "IDENTIFIED", name: "Identified", probability: 5 },
+      { key: "QUALIFIED", name: "Qualified", probability: 15 },
+      { key: "DISCOVERY", name: "Discovery", probability: 25 },
+      { key: "SOLUTION_FIT", name: "Solution Fit", probability: 35 },
+      { key: "PILOT", name: "Pilot / Demo", probability: 50 },
       { key: "PROPOSAL", name: "Proposal", probability: 65 },
       { key: "NEGOTIATION", name: "Negotiation", probability: 80 },
       ...CLOSED,

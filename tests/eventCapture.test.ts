@@ -238,6 +238,47 @@ describe("Sprint 06E — Quick Capture", { skip: !hasDb && "DATABASE_URL not set
     assert.equal(count, 1);
   });
 
+  test("SalesX Quick Capture creates a Lead with SALESX as primary product, linked Account/Contact/Activity/Task", async () => {
+    const result = await captureEvent(
+      baseInput({
+        company: `SalesX Co ${RUN_ID}`,
+        fullName: `SalesX Person ${RUN_ID}`,
+        product: "SALESX",
+        nextAction: "Send SalesX introduction",
+      })
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    createdAccountIds.add(result.accountId);
+    assert.equal(result.classification, "NEW_ACCOUNT_NEW_CONTACT");
+
+    const lead = await prisma!.lead.findUniqueOrThrow({ where: { id: result.leadId } });
+    assert.equal(lead.primaryProduct, "SALESX");
+    assert.equal(lead.accountId, result.accountId);
+    assert.equal(lead.primaryContactId, result.contactId);
+    assert.equal(lead.status, "NEW");
+
+    const activity = await prisma!.activity.findUniqueOrThrow({ where: { id: result.activityId } });
+    assert.equal(activity.type, "EVENT_INTERACTION");
+    assert.equal(activity.product, "SALESX");
+    assert.equal(activity.leadId, result.leadId);
+    assert.equal(activity.contactId, result.contactId);
+    assert.equal(activity.accountId, result.accountId);
+
+    assert.notEqual(result.taskId, null);
+    const task = await prisma!.task.findUniqueOrThrow({ where: { id: result.taskId! } });
+    assert.equal(task.product, "SALESX");
+    assert.equal(task.clientCommitmentDate, null);
+  });
+
+  test("an invalid product (rejecting a stale exclusion) still rejects garbage, but SALESX itself is accepted", async () => {
+    const rejected = await captureEvent(baseInput({ company: `Garbage Co ${RUN_ID}`, product: "NOT_A_REAL_PRODUCT" }));
+    assert.equal(rejected.ok, false);
+    const accepted = await captureEvent(baseInput({ company: `SalesXValid Co ${RUN_ID}`, product: "SALESX", idempotencyKey: `salesx-valid-${RUN_ID}` }));
+    assert.equal(accepted.ok, true);
+    if (accepted.ok) createdAccountIds.add(accepted.accountId);
+  });
+
   test("unrelated records are excluded — a capture never touches another company's Account", async () => {
     const untouchedCompany = `Untouched Co ${RUN_ID}`;
     const untouched = await prisma!.account.create({ data: { name: untouchedCompany } });
