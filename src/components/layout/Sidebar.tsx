@@ -21,6 +21,7 @@ import {
   Search,
   Mic,
   FileSignature,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey } from "@/lib/products";
@@ -42,6 +43,13 @@ const WORK_NAV: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: CheckSquare, carryProduct: true },
   { href: "/activities", label: "Activities", icon: Clock, carryProduct: true },
   { href: "/import", label: "Import CSV", icon: Upload },
+];
+
+// Reuses the existing /admin/data-audit route (see src/app/admin/data-audit)
+// — no new route, no change to its CRM_ACCESS_PASSWORD protection.
+const SYSTEM_NAV: NavItem[] = [
+  { href: "/admin/data-audit", label: "Admin", icon: ShieldCheck },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const PRODUCT_ICONS: Record<string, LucideIcon> = {
@@ -74,9 +82,9 @@ function SidebarInner() {
     carry && product ? `${href}?product=${product}` : href;
 
   return (
-    <aside className="w-60 shrink-0 bg-gradient-to-b from-brand-950 via-brand-950 to-[#12143d] flex flex-col min-h-screen">
-      {/* Logo */}
-      <div className="px-5 py-5">
+    <aside className="w-60 shrink-0 bg-gradient-to-b from-brand-950 via-brand-950 to-[#12143d] flex flex-col h-screen overflow-hidden">
+      {/* Logo — fixed at top */}
+      <div className="shrink-0 px-5 py-5">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-brand-900/50">
             A
@@ -88,8 +96,8 @@ function SidebarInner() {
         </Link>
       </div>
 
-      {/* Global search trigger */}
-      <div className="px-3 pb-1">
+      {/* Global search trigger — fixed at top, below the logo */}
+      <div className="shrink-0 px-3 pb-1">
         <button
           onClick={() => window.dispatchEvent(new Event("arqone:open-search"))}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-200/60 hover:text-white text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300"
@@ -173,22 +181,29 @@ function SidebarInner() {
 
         <SectionLabel>System</SectionLabel>
         <div className="space-y-0.5">
-          <Link
-            href="/settings"
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300 ${
-              isActive("/settings")
-                ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white font-medium shadow-lg shadow-brand-900/50"
-                : "text-brand-200/70 hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <Settings size={17} strokeWidth={1.8} className={isActive("/settings") ? "text-white" : "text-brand-300/60"} />
-            Settings
-          </Link>
+          {SYSTEM_NAV.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300 ${
+                  active
+                    ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white font-medium shadow-lg shadow-brand-900/50"
+                    : "text-brand-200/70 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Icon size={17} strokeWidth={1.8} className={active ? "text-white" : "text-brand-300/60"} />
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
-      {/* Current user */}
-      <div className="px-3 py-3 border-t border-white/5">
+      {/* Current user — stays pinned below the scrollable nav, never pushed offscreen */}
+      <div className="shrink-0 px-3 py-3 border-t border-white/5">
         <UserSwitcher />
       </div>
     </aside>
@@ -198,7 +213,7 @@ function SidebarInner() {
 export default function Sidebar() {
   return (
     <Suspense
-      fallback={<aside className="w-60 shrink-0 bg-brand-950 min-h-screen" />}
+      fallback={<aside className="w-60 shrink-0 bg-brand-950 h-screen" />}
     >
       <SidebarInner />
     </Suspense>
