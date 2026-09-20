@@ -22,6 +22,7 @@ import {
   Mic,
   FileSignature,
   ShieldCheck,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey } from "@/lib/products";
@@ -74,6 +75,12 @@ function SidebarInner() {
   const rawProduct = searchParams.get("product");
   const product = rawProduct && isProductKey(rawProduct) ? rawProduct : null;
 
+  // Quick Capture (Sprint 06E) is a mobile-first, one-column flow — the
+  // fixed-width desktop sidebar would eat most of a phone viewport, so it
+  // doesn't render on /capture routes. This is the only route where the
+  // sidebar is hidden; every other page is unaffected.
+  if (pathname.startsWith("/capture")) return null;
+
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -106,6 +113,17 @@ function SidebarInner() {
           <span className="flex-1 text-left">Search…</span>
           <kbd className="text-[10px] text-brand-300/50 border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
         </button>
+      </div>
+
+      {/* Quick Capture (Sprint 06E) — global, always one tap away */}
+      <div className="shrink-0 px-3 pb-2">
+        <Link
+          href="/capture/event"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-brand-950 text-[13px] font-semibold hover:from-amber-300 hover:to-amber-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300"
+        >
+          <Zap size={15} strokeWidth={2} aria-hidden />
+          Quick Capture
+        </Link>
       </div>
 
       {/* Nav */}

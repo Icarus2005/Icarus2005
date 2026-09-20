@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Plus, Inbox } from "lucide-react";
+import { Plus, Inbox, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { COUNTRIES, LEAD_STATUSES, LEAD_SOURCES } from "@/lib/constants";
 import { SALES_MOTIONS, parseProductParam, PRODUCTS_META } from "@/lib/products";
@@ -101,6 +101,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             </Link>
           )}
           <ExportButton entity="leads" />
+          <Link href={`/capture/event${product ? `?product=${product}` : ""}`} className="btn-secondary border-amber-200 text-amber-700 hover:bg-amber-50">
+            <Zap size={15} aria-hidden /> Quick Capture
+          </Link>
           <Link href={`/leads/new${product ? `?product=${product}` : ""}`} className="btn-primary">
             <Plus size={16} aria-hidden /> New Lead
           </Link>
