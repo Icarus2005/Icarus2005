@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Info } from "lucide-react";
 import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
 import { inheritedProduct } from "@/lib/products";
@@ -14,6 +14,7 @@ type Task = {
   title: string;
   notes: string | null;
   dueDate: string | null;
+  clientCommitmentDate: string | null;
   status: string;
   priority: string;
   product: string | null;
@@ -63,6 +64,7 @@ function TasksPageInner() {
   const [showDone, setShowDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeBucket, setActiveBucket] = useState<string>("All");
 
   const load = useCallback(async () => {
     setError("");
@@ -108,7 +110,19 @@ function TasksPageInner() {
     await fetch(`/api/tasks/${id}`, { method: "DELETE" });
   }
 
-  const buckets = bucketize(tasks).filter((b) => (showDone ? true : b.label !== "Completed"));
+  async function updateDueDate(task: Task, value: string) {
+    const dueDate = value ? new Date(value).toISOString() : null;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, dueDate } : t)));
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dueDate }),
+    });
+    load();
+  }
+
+  const allBuckets = bucketize(tasks).filter((b) => (showDone ? true : b.label !== "Completed"));
+  const buckets = activeBucket === "All" ? allBuckets : allBuckets.filter((b) => b.label === activeBucket);
   const now = new Date();
 
   return (
@@ -149,6 +163,25 @@ function TasksPageInner() {
           />
           Show completed
         </label>
+      </div>
+
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {["All", ...allBuckets.map((b) => b.label)].map((label) => (
+          <button
+            key={label}
+            onClick={() => setActiveBucket(label)}
+            className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+              activeBucket === label
+                ? "bg-brand-600 border-brand-600 text-white"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {label}
+            {label !== "All" && (
+              <span className="ml-1 opacity-70">({allBuckets.find((b) => b.label === label)?.tasks.length ?? 0})</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -211,10 +244,27 @@ function TasksPageInner() {
                       </div>
                     </div>
                     <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
-                      {task.dueDate && (
-                        <span className={`text-xs font-medium ${overdue ? "text-red-600" : "text-gray-400"}`}>
-                          {overdue ? "Overdue · " : ""}
-                          {new Date(task.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      <label className="flex flex-col items-end gap-0.5">
+                        <span
+                          className="text-[10px] text-gray-400 inline-flex items-center gap-0.5"
+                          title="Internal follow-up target set by ArqOne — not a date the client agreed to"
+                        >
+                          Internal target <Info size={10} aria-hidden />
+                        </span>
+                        <input
+                          type="date"
+                          aria-label={`Due date for ${task.title}`}
+                          value={task.dueDate ? task.dueDate.slice(0, 10) : ""}
+                          onChange={(e) => updateDueDate(task, e.target.value)}
+                          className={`text-xs border rounded px-1.5 py-0.5 ${
+                            overdue ? "border-red-300 text-red-600 font-medium" : "border-gray-200 text-gray-600"
+                          }`}
+                        />
+                        {overdue && <span className="text-[10px] text-red-600 font-semibold">Overdue</span>}
+                      </label>
+                      {task.clientCommitmentDate && (
+                        <span className="text-[10px] text-brand-600" title="Externally agreed date — the client committed to this">
+                          Client commitment: {new Date(task.clientCommitmentDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                         </span>
                       )}
                       <button

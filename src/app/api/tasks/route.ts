@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   if (body.dueDate) body.dueDate = new Date(body.dueDate);
+  if (body.clientCommitmentDate) body.clientCommitmentDate = new Date(body.clientCommitmentDate);
   // Explicit product only makes sense without lead/opportunity context —
   // linked records provide inherited product instead.
   if (body.product !== undefined) {

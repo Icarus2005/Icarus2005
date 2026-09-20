@@ -81,6 +81,7 @@ function NewTaskPageForm() {
           <div>
             <label className="label">Due Date</label>
             <input name="dueDate" type="date" className="input" />
+            <p className="text-[11px] text-gray-400 mt-1">Internal follow-up target — not a date the client agreed to.</p>
           </div>
           <div>
             <label className="label">Priority</label>
@@ -143,6 +144,12 @@ function NewTaskPageForm() {
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="label">Client Commitment Date (optional)</label>
+          <input name="clientCommitmentDate" type="date" className="input" />
+          <p className="text-[11px] text-gray-400 mt-1">Only set this if the client has actually agreed to a specific date.</p>
         </div>
 
         <div>

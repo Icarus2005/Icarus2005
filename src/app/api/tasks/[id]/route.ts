@@ -6,7 +6,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const body = await req.json();
-  if (body.dueDate) body.dueDate = new Date(body.dueDate);
+  if ("dueDate" in body) body.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+  if ("clientCommitmentDate" in body) body.clientCommitmentDate = body.clientCommitmentDate ? new Date(body.clientCommitmentDate) : null;
   const task = await prisma.task.update({
     where: { id: params.id },
     data: body,
