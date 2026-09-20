@@ -425,6 +425,14 @@ model Activity {
   contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   opportunityId String?
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  // Sprint 06D — set only on type=EMAIL activities created by the approved-send
+  // route (src/app/api/email/send). Never set for manually logged activities.
+  // idempotencyKey: the client-generated key for one Approve & Send attempt —
+  // enforces that a retried/duplicated request records at most one Activity.
+  // providerMessageId: Zoho's returned message id, kept for audit only; never
+  // required for anything else to function.
+  idempotencyKey String?      @unique
+  providerMessageId String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

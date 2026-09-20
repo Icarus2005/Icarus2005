@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildSalesContext, isSalesCopilotEntityType } from "@/lib/salesCopilot/context";
 import { isSalesCopilotAction, runNextAction, runDraftEmail, runMeetingObjective } from "@/lib/salesCopilot/prompt";
+import { isZohoConfigured } from "@/lib/email/zoho";
 
 /**
  * Sales Copilot — Sprint 06C, Phase 8.
@@ -54,5 +55,17 @@ export async function POST(req: NextRequest) {
       break;
   }
 
-  return NextResponse.json({ action, entityType, entityId, result });
+  // Sprint 06D: the approval/send flow (client-side) needs to know which
+  // Contact a draft is about, its email on file, and a same-request open
+  // task if exactly one exists — included here so the panel doesn't need a
+  // second round trip, without changing the shape of `result` itself.
+  const recipient = {
+    contactId: context.contactId,
+    contactEmail: context.contactEmail,
+    contactName: context.contactName,
+    candidateTaskId: context.openTasks.length === 1 ? context.openTasks[0].id : null,
+    candidateTaskTitle: context.openTasks.length === 1 ? context.openTasks[0].title : null,
+  };
+
+  return NextResponse.json({ action, entityType, entityId, result, recipient, emailConfigured: isZohoConfigured() });
 }

@@ -27,12 +27,16 @@ const MAX_ACTIVITIES = 8;
 const MAX_OPEN_TASKS = 5;
 
 export type SalesContextActivity = { type: string; subject: string; notes: string | null; date: string };
-export type SalesContextTask = { title: string; dueDate: string | null; clientCommitmentDate: string | null };
+export type SalesContextTask = { id: string; title: string; dueDate: string | null; clientCommitmentDate: string | null };
 
 export type SalesContext = {
   entityType: SalesCopilotEntityType;
   entityId: string;
+  /** The Contact record this context is about (CONTACT: itself; LEAD: primary contact; OPPORTUNITY: primary stakeholder). Null when none exists yet. */
+  contactId: string | null;
   contactName: string | null;
+  /** The Contact record's actual email — never inferred or fabricated. Null when the Contact has none on file. */
+  contactEmail: string | null;
   jobTitle: string | null;
   accountName: string | null;
   leadStatus: string | null;
@@ -65,7 +69,7 @@ function capActivities(activities: { type: string; subject: string; notes: strin
     .map((a) => ({ type: a.type, subject: a.subject, notes: a.notes, date: toIso(a.date)! }));
 }
 
-function capOpenTasks(tasks: { title: string; dueDate: Date | null; clientCommitmentDate: Date | null; status: string }[]): SalesContextTask[] {
+function capOpenTasks(tasks: { id: string; title: string; dueDate: Date | null; clientCommitmentDate: Date | null; status: string }[]): SalesContextTask[] {
   return tasks
     .filter((t) => t.status !== "DONE")
     .sort((a, b) => {
@@ -75,7 +79,7 @@ function capOpenTasks(tasks: { title: string; dueDate: Date | null; clientCommit
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     })
     .slice(0, MAX_OPEN_TASKS)
-    .map((t) => ({ title: t.title, dueDate: toIso(t.dueDate), clientCommitmentDate: toIso(t.clientCommitmentDate) }));
+    .map((t) => ({ id: t.id, title: t.title, dueDate: toIso(t.dueDate), clientCommitmentDate: toIso(t.clientCommitmentDate) }));
 }
 
 async function buildFromLead(entityId: string): Promise<SalesContext | null> {
@@ -83,9 +87,9 @@ async function buildFromLead(entityId: string): Promise<SalesContext | null> {
     where: { id: entityId },
     include: {
       account: { select: { name: true } },
-      primaryContact: { select: { firstName: true, lastName: true, title: true } },
+      primaryContact: { select: { id: true, firstName: true, lastName: true, title: true, email: true } },
       activities: { select: { type: true, subject: true, notes: true, date: true } },
-      tasks: { select: { title: true, dueDate: true, clientCommitmentDate: true, status: true } },
+      tasks: { select: { id: true, title: true, dueDate: true, clientCommitmentDate: true, status: true } },
     },
   });
   if (!lead) return null;
@@ -102,7 +106,9 @@ async function buildFromLead(entityId: string): Promise<SalesContext | null> {
   return {
     entityType: "LEAD",
     entityId,
+    contactId: lead.primaryContact?.id ?? null,
     contactName: lead.primaryContact ? `${lead.primaryContact.firstName} ${lead.primaryContact.lastName}` : lead.name,
+    contactEmail: lead.primaryContact?.email ?? null,
     jobTitle: lead.primaryContact?.title ?? lead.title ?? null,
     accountName: lead.account?.name ?? lead.company ?? null,
     leadStatus: LEAD_STATUSES[lead.status] ?? lead.status,
@@ -135,7 +141,7 @@ async function buildFromContact(entityId: string): Promise<SalesContext | null> 
         include: { opportunity: { select: { name: true, stage: true, value: true, healthStatus: true } } },
       },
       activities: { select: { type: true, subject: true, notes: true, date: true } },
-      tasks: { select: { title: true, dueDate: true, clientCommitmentDate: true, status: true } },
+      tasks: { select: { id: true, title: true, dueDate: true, clientCommitmentDate: true, status: true } },
     },
   });
   if (!contact) return null;
@@ -153,7 +159,9 @@ async function buildFromContact(entityId: string): Promise<SalesContext | null> 
   return {
     entityType: "CONTACT",
     entityId,
+    contactId: contact.id,
     contactName: `${contact.firstName} ${contact.lastName}`,
+    contactEmail: contact.email,
     jobTitle: contact.title,
     accountName: contact.account?.name ?? null,
     leadStatus: null,
@@ -183,9 +191,9 @@ async function buildFromOpportunity(entityId: string): Promise<SalesContext | nu
     where: { id: entityId },
     include: {
       account: { select: { name: true } },
-      contacts: { include: { contact: { select: { firstName: true, lastName: true, title: true, relationshipStrength: true, sourceType: true, sourceDetail: true } } } },
+      contacts: { include: { contact: { select: { id: true, firstName: true, lastName: true, title: true, email: true, relationshipStrength: true, sourceType: true, sourceDetail: true } } } },
       activities: { select: { type: true, subject: true, notes: true, date: true } },
-      tasks: { select: { title: true, dueDate: true, clientCommitmentDate: true, status: true } },
+      tasks: { select: { id: true, title: true, dueDate: true, clientCommitmentDate: true, status: true } },
     },
   });
   if (!opp) return null;
@@ -203,7 +211,9 @@ async function buildFromOpportunity(entityId: string): Promise<SalesContext | nu
   return {
     entityType: "OPPORTUNITY",
     entityId,
+    contactId: primary?.id ?? null,
     contactName: primary ? `${primary.firstName} ${primary.lastName}` : null,
+    contactEmail: primary?.email ?? null,
     jobTitle: primary?.title ?? null,
     accountName: opp.account?.name ?? null,
     leadStatus: null,
