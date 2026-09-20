@@ -138,10 +138,10 @@ const PEOPLE: PersonSpec[] = [
     relationshipStrength: "REFERRED",
     sourceType: "REFERRAL",
     sourceDetail: "ATM Dubai 2026 — contact provided at stand",
-    acquisitionPath: "CARD_PROVIDED",
+    acquisitionPath: "STAND_REFERRAL",
     leadStatus: "NEW",
     taskTitle: "Send conservative EmQuest referral introduction",
-    note: "acquisitionPath: spec text said REFERRED_BY_COMPANY_TEAM but the canonical relationship ('handed his card, never spoke to him') matches the schema's CARD_PROVIDED enum more precisely — used CARD_PROVIDED. Flag for review if this doesn't match intent.",
+    note: "acquisitionPath approved as STAND_REFERRAL by CRM owner (2026-09-20), overriding the earlier CARD_PROVIDED mapping. Factual narrative unchanged: his card was handed to Piero; Piero did not speak with him directly.",
   },
   {
     key: "mikin_ajwani",
