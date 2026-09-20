@@ -153,7 +153,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         <div className="card p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-semibold text-gray-700">Tasks</h2>
-            <Link href={`/tasks/new?leadId=${lead.id}`} className="text-xs text-brand-600 hover:underline">+ Add Task</Link>
+            <Link href={`/tasks/new?leadId=${lead.id}${lead.accountId ? `&accountId=${lead.accountId}` : ""}`} className="text-xs text-brand-600 hover:underline">+ Add Task</Link>
           </div>
           {lead.tasks.length === 0 && <p className="text-sm text-gray-400">No tasks.</p>}
           <div className="space-y-2">

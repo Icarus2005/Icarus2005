@@ -20,6 +20,10 @@ function NewTaskPageForm() {
   const [opportunities, setOpportunities] = useState<{ id: string; name: string }[]>([]);
   const [leadId, setLeadId] = useState(prefillLeadId);
   const [opportunityId, setOpportunityId] = useState(prefillOpportunityId);
+  // Controlled (not defaultValue) because options load asynchronously —
+  // defaultValue is only applied at mount, so it silently fails to prefill
+  // once the option list arrives after the initial render.
+  const [accountId, setAccountId] = useState(prefillAccountId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -138,7 +142,7 @@ function NewTaskPageForm() {
 
         <div>
           <label className="label">Linked Account</label>
-          <select name="accountId" defaultValue={prefillAccountId} className="input">
+          <select name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input">
             <option value="">None</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
