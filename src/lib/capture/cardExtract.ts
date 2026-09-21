@@ -102,6 +102,7 @@ export type VisionCaller = (opts: {
   imageBase64: string;
   mediaType: CardMimeType;
   maxTokens?: number;
+  traceId?: string;
 }) => Promise<VisionCallResult>;
 
 export type CardExtractDiagnostic = VisionErrorKind | "RESPONSE_PARSE_ERROR";
@@ -121,7 +122,8 @@ export type CardExtractOutcome =
 export async function extractCardFields(
   imageBase64: string,
   mediaType: CardMimeType,
-  visionCall: VisionCaller = completeVision
+  visionCall: VisionCaller = completeVision,
+  traceId?: string
 ): Promise<CardExtractOutcome> {
   const callResult = await visionCall({
     model: TRIAGE_MODEL,
@@ -130,6 +132,7 @@ export async function extractCardFields(
     imageBase64,
     mediaType,
     maxTokens: 800,
+    traceId,
   });
 
   if (!callResult.ok) {

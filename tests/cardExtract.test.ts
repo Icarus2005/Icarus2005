@@ -10,7 +10,7 @@ import {
   type VisionCaller,
 } from "../src/lib/capture/cardExtract";
 import { captureEvent } from "../src/lib/capture/eventCapture";
-import type { VisionErrorKind } from "../src/lib/proposals/llm";
+import { classifyVisionError, type VisionErrorKind } from "../src/lib/proposals/llm";
 
 // Never makes a live paid call: every test here injects a fake vision
 // caller. ANTHROPIC_API_KEY is force-unset so any accidental fallthrough
@@ -140,6 +140,47 @@ describe("Sprint 06E.1 — business card extraction (pure, no DB)", () => {
     if (outcome.ok) return;
     assert.equal(outcome.diagnostic, "NO_TEXT_EXTRACTED");
   });
+
+  test("a provider rate-limit response (429) is categorized as PROVIDER_RATE_LIMITED, not the generic request-error bucket", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing("PROVIDER_RATE_LIMITED"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "PROVIDER_RATE_LIMITED");
+  });
+
+  test("a provider server error (5xx) is categorized as PROVIDER_UNAVAILABLE, not 'could not reach'", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing("PROVIDER_UNAVAILABLE"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "PROVIDER_UNAVAILABLE");
+  });
+
+  describe("classifyVisionError — status-to-category mapping (Step 6 provider scenarios)", () => {
+    test("401/403 -> PROVIDER_AUTH_ERROR", () => {
+      assert.equal(classifyVisionError(401, "authentication_error", ""), "PROVIDER_AUTH_ERROR");
+      assert.equal(classifyVisionError(403, "permission_error", ""), "PROVIDER_AUTH_ERROR");
+    });
+    test("404/model-not-found -> PROVIDER_MODEL_ERROR", () => {
+      assert.equal(classifyVisionError(404, "not_found_error", ""), "PROVIDER_MODEL_ERROR");
+      assert.equal(classifyVisionError(400, "not_found_error", "model: claude-bogus not found"), "PROVIDER_MODEL_ERROR");
+    });
+    test("413 or a 400 size message -> IMAGE_TOO_LARGE (payload issue)", () => {
+      assert.equal(classifyVisionError(413, "", ""), "IMAGE_TOO_LARGE");
+      assert.equal(classifyVisionError(400, "invalid_request_error", "image exceeds maximum allowed size"), "IMAGE_TOO_LARGE");
+    });
+    test("429 -> PROVIDER_RATE_LIMITED", () => {
+      assert.equal(classifyVisionError(429, "rate_limit_error", ""), "PROVIDER_RATE_LIMITED");
+    });
+    test("500/502/503/529 -> PROVIDER_UNAVAILABLE", () => {
+      for (const status of [500, 502, 503, 529]) {
+        assert.equal(classifyVisionError(status, "api_error", ""), "PROVIDER_UNAVAILABLE");
+      }
+    });
+    test("an unrecognized 400 falls back to PROVIDER_REQUEST_ERROR", () => {
+      assert.equal(classifyVisionError(400, "invalid_request_error", "something unexpected"), "PROVIDER_REQUEST_ERROR");
+    });
+  });
+
 
   test("a real portrait-orientation image file round-trips through extraction with a mocked model response", async () => {
     // No real photographed business card is available in this environment —

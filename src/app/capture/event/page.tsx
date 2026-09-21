@@ -161,13 +161,32 @@ function CaptureEventForm() {
 
     if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
     setCardPreviewUrl(URL.createObjectURL(normalized));
+
+    // One id per upload attempt — sent to the server and echoed back so a
+    // specific attempt can be traced through server logs end to end.
+    const traceId = crypto.randomUUID();
+    let res: Response;
     try {
       const form = new FormData();
       form.append("image", normalized, "card.jpg");
-      const res = await fetch("/api/capture/card-extract", { method: "POST", body: form });
+      form.append("traceId", traceId);
+      res = await fetch("/api/capture/card-extract", { method: "POST", body: form });
+    } catch {
+      // The fetch to our OWN route never completed — this is the one case
+      // that genuinely means the client couldn't reach the server at all.
+      // A server-returned diagnostic category (handled below) is a
+      // different situation and must never collapse into this message.
+      setExtractError("Could not reach the server. Check your connection and try again.");
+      setExtracting(false);
+      return;
+    }
+
+    try {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setExtractError(data.error ?? "Could not extract card details.");
+        // Server responded — use its safe category/message rather than a
+        // generic client-side fallback.
+        setExtractError(typeof data.message === "string" ? data.message : "Could not extract card details.");
         return;
       }
       // Populate only fields the user hasn't already filled in.
@@ -179,8 +198,6 @@ function CaptureEventForm() {
       setLinkedin((prev) => prev || data.linkedinUrl || "");
       setConfidence(data.confidence ?? {});
       setExtractedBanner(true);
-    } catch {
-      setExtractError("Network error — the card wasn't extracted. Your existing entries are unchanged.");
     } finally {
       setExtracting(false);
     }
