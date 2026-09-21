@@ -7,8 +7,43 @@ import { Mic, Check, Camera, Upload, Sparkles } from "lucide-react";
 import { BUSINESS_LINES, PRODUCTS_META, isProductKey, type ProductKey } from "@/lib/products";
 import { CAPTURE_ACQUISITION_OPTIONS, type CaptureAcquisitionKey } from "@/lib/capture/eventCapture";
 
-const ALLOWED_CARD_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_CARD_IMAGE_BYTES = 4 * 1024 * 1024;
+// Long edge target for normalized card photos — enough resolution to read
+// small printed text, without sending a full 12MP phone photo.
+const CARD_TARGET_LONG_EDGE = 1800;
+const CARD_JPEG_QUALITY = 0.85;
+
+/**
+ * Normalizes a photo before upload: corrects EXIF orientation (portrait vs.
+ * landscape capture, upside-down phones, etc. — createImageBitmap's
+ * imageOrientation:"from-image" bakes the correct rotation into the
+ * decoded bitmap), downsizes the long edge to ~1800px, and re-encodes as
+ * JPEG. This also transparently handles HEIC/HEIF: Safari's
+ * createImageBitmap can decode it like any other photo, so the browser
+ * does the format conversion for us — if a browser genuinely can't decode
+ * the source image, this throws and the caller shows a clear message
+ * rather than uploading something the server can't use either.
+ */
+async function normalizeCardImage(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  try {
+    const longEdge = Math.max(bitmap.width, bitmap.height);
+    const scale = longEdge > CARD_TARGET_LONG_EDGE ? CARD_TARGET_LONG_EDGE / longEdge : 1;
+    const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
+    const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("2D canvas context unavailable");
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", CARD_JPEG_QUALITY));
+    if (!blob) throw new Error("Could not encode normalized image");
+    return blob;
+  } finally {
+    bitmap.close();
+  }
+}
 
 type CardConfidence = Partial<Record<"fullName" | "company" | "jobTitle" | "email" | "phone" | "linkedinUrl", "high" | "medium" | "low">>;
 
@@ -104,21 +139,31 @@ function CaptureEventForm() {
     if (!file || extracting) return; // guard against a second selection firing mid-extraction
     setExtractError("");
     setExtractedBanner(false);
-    if (!ALLOWED_CARD_TYPES.includes(file.type)) {
-      setExtractError("Unsupported image type. Use JPEG, PNG, or WebP.");
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
+      setExtractError("Unsupported file type. Choose a photo.");
       return;
     }
-    if (file.size > MAX_CARD_IMAGE_BYTES) {
-      setExtractError("Image is too large (max 4MB).");
+
+    setExtracting(true);
+    let normalized: Blob;
+    try {
+      normalized = await normalizeCardImage(file);
+    } catch {
+      setExtracting(false);
+      setExtractError("This photo couldn't be processed here. Try again, or choose a JPEG/PNG/WebP image.");
+      return;
+    }
+    if (normalized.size > MAX_CARD_IMAGE_BYTES) {
+      setExtracting(false);
+      setExtractError("Image is too large even after compression. Try a different photo.");
       return;
     }
 
     if (cardPreviewUrl) URL.revokeObjectURL(cardPreviewUrl);
-    setCardPreviewUrl(URL.createObjectURL(file));
-    setExtracting(true);
+    setCardPreviewUrl(URL.createObjectURL(normalized));
     try {
       const form = new FormData();
-      form.append("image", file);
+      form.append("image", normalized, "card.jpg");
       const res = await fetch("/api/capture/card-extract", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

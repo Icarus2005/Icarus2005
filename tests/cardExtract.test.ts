@@ -1,29 +1,51 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
-import { extractCardFields, isAllowedCardMimeType, MAX_CARD_IMAGE_BYTES } from "../src/lib/capture/cardExtract";
+import fs from "node:fs";
+import path from "node:path";
+import {
+  extractCardFields,
+  isAllowedCardMimeType,
+  MAX_CARD_IMAGE_BYTES,
+  type VisionCaller,
+} from "../src/lib/capture/cardExtract";
 import { captureEvent } from "../src/lib/capture/eventCapture";
-import type { VisionCaller } from "../src/lib/capture/cardExtract";
+import type { VisionErrorKind } from "../src/lib/proposals/llm";
 
 // Never makes a live paid call: every test here injects a fake vision
 // caller. ANTHROPIC_API_KEY is force-unset so any accidental fallthrough
-// to the real completeVision() would return null, not a live extraction.
+// to the real completeVision() would return NOT_CONFIGURED, not a live
+// extraction.
 delete process.env.ANTHROPIC_API_KEY;
 
 const hasDb = !!process.env.DATABASE_URL;
 const prisma = hasDb ? new PrismaClient() : null;
 const RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-function fakeVisionReturning(json: unknown): VisionCaller {
-  return (async () => JSON.stringify(json)) as VisionCaller;
+function fakeVisionOk(json: unknown): VisionCaller {
+  return (async () => ({ ok: true, text: JSON.stringify(json) })) as VisionCaller;
 }
-function fakeVisionFailing(): VisionCaller {
-  return (async () => null) as VisionCaller;
+function fakeVisionFailing(kind: VisionErrorKind): VisionCaller {
+  return (async () => ({ ok: false, kind })) as VisionCaller;
 }
+function fakeVisionReturningRaw(text: string): VisionCaller {
+  return (async () => ({ ok: true, text })) as VisionCaller;
+}
+
+// Small synthetic JPEG fixtures — this environment has no real photographed
+// business card available, so portrait/landscape "card-shaped" fixtures are
+// generated at test time (see the note in the test itself). Extraction
+// content is mocked; these fixtures only exercise that a real portrait/
+// landscape image file round-trips through extractCardFields without the
+// pipeline itself caring about orientation (the model receives the bytes
+// as-is — orientation normalization happens client-side before upload).
+const FIXTURE_DIR = path.join(__dirname, "fixtures");
+const PORTRAIT_FIXTURE = path.join(FIXTURE_DIR, "card-portrait.jpg");
+const LANDSCAPE_FIXTURE = path.join(FIXTURE_DIR, "card-landscape.jpg");
 
 describe("Sprint 06E.1 — business card extraction (pure, no DB)", () => {
   test("1. valid card image returns structured fields", async () => {
-    const vision = fakeVisionReturning({
+    const vision = fakeVisionOk({
       fullName: "Jane Doe",
       company: "Acme Corp",
       jobTitle: "VP Sales",
@@ -32,16 +54,17 @@ describe("Sprint 06E.1 — business card extraction (pure, no DB)", () => {
       linkedinUrl: "https://linkedin.com/in/janedoe",
       confidence: { fullName: "high", company: "high", email: "medium" },
     });
-    const result = await extractCardFields("fakebase64", "image/jpeg", vision);
-    assert.ok(result);
-    assert.equal(result!.fullName, "Jane Doe");
-    assert.equal(result!.company, "Acme Corp");
-    assert.equal(result!.email, "jane@acme.com");
-    assert.equal(result!.confidence.fullName, "high");
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", vision);
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.result.fullName, "Jane Doe");
+    assert.equal(outcome.result.company, "Acme Corp");
+    assert.equal(outcome.result.email, "jane@acme.com");
+    assert.equal(outcome.result.confidence.fullName, "high");
   });
 
   test("2. missing fields return null, not invented data", async () => {
-    const vision = fakeVisionReturning({
+    const vision = fakeVisionOk({
       fullName: "John Smith",
       company: null,
       jobTitle: null,
@@ -50,20 +73,19 @@ describe("Sprint 06E.1 — business card extraction (pure, no DB)", () => {
       linkedinUrl: null,
       confidence: { fullName: "high" },
     });
-    const result = await extractCardFields("fakebase64", "image/jpeg", vision);
-    assert.ok(result);
-    assert.equal(result!.fullName, "John Smith");
-    assert.equal(result!.company, null);
-    assert.equal(result!.jobTitle, null);
-    assert.equal(result!.email, null);
-    assert.equal(result!.phone, null);
-    assert.equal(result!.linkedinUrl, null);
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", vision);
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.result.fullName, "John Smith");
+    assert.equal(outcome.result.company, null);
+    assert.equal(outcome.result.jobTitle, null);
+    assert.equal(outcome.result.email, null);
+    assert.equal(outcome.result.phone, null);
+    assert.equal(outcome.result.linkedinUrl, null);
   });
 
   test("confidence is dropped for any field the model didn't actually extract", async () => {
-    // A model that hallucinates a confidence entry for a null field must
-    // not have that confidence surfaced — sanitize() strips it.
-    const vision = fakeVisionReturning({
+    const vision = fakeVisionOk({
       fullName: "Jane Doe",
       company: null,
       jobTitle: null,
@@ -72,28 +94,80 @@ describe("Sprint 06E.1 — business card extraction (pure, no DB)", () => {
       linkedinUrl: null,
       confidence: { fullName: "high", company: "low" },
     });
-    const result = await extractCardFields("fakebase64", "image/jpeg", vision);
-    assert.ok(result);
-    assert.equal(result!.confidence.company, undefined);
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", vision);
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.result.confidence.company, undefined);
   });
 
   test("3. an invalid MIME type is rejected", () => {
     assert.equal(isAllowedCardMimeType("image/gif"), false);
     assert.equal(isAllowedCardMimeType("application/pdf"), false);
+    assert.equal(isAllowedCardMimeType("image/heic"), false);
     assert.equal(isAllowedCardMimeType("image/jpeg"), true);
     assert.equal(isAllowedCardMimeType("image/png"), true);
     assert.equal(isAllowedCardMimeType("image/webp"), true);
   });
 
   test("4. an oversized image is rejected by the size limit constant", () => {
-    // The route enforces this against file.size/bytes.byteLength; verified
-    // here that the limit is the documented 4MB, not silently changed.
     assert.equal(MAX_CARD_IMAGE_BYTES, 4 * 1024 * 1024);
   });
 
-  test("extraction failure (bad/unparseable model response) returns null, not a fabricated empty card", async () => {
-    const result = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing());
-    assert.equal(result, null);
+  test("extraction failure (bad/unparseable model response) is categorized as RESPONSE_PARSE_ERROR, not a fabricated empty card", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionReturningRaw("not json at all"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "RESPONSE_PARSE_ERROR");
+  });
+
+  test("a provider auth failure is categorized as PROVIDER_AUTH_ERROR, not the generic parse-error message", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing("PROVIDER_AUTH_ERROR"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "PROVIDER_AUTH_ERROR");
+  });
+
+  test("a provider model failure is categorized as PROVIDER_MODEL_ERROR", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing("PROVIDER_MODEL_ERROR"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "PROVIDER_MODEL_ERROR");
+  });
+
+  test("no text content in the response is categorized as NO_TEXT_EXTRACTED", async () => {
+    const outcome = await extractCardFields("fakebase64", "image/jpeg", fakeVisionFailing("NO_TEXT_EXTRACTED"));
+    assert.equal(outcome.ok, false);
+    if (outcome.ok) return;
+    assert.equal(outcome.diagnostic, "NO_TEXT_EXTRACTED");
+  });
+
+  test("a real portrait-orientation image file round-trips through extraction with a mocked model response", async () => {
+    // No real photographed business card is available in this environment —
+    // this fixture is a generated portrait-shaped JPEG. It exercises that
+    // extractCardFields doesn't care about file dimensions/orientation
+    // (that's handled client-side before upload); the model response itself
+    // is mocked, per the "never make a live call in tests" rule.
+    const bytes = fs.readFileSync(PORTRAIT_FIXTURE);
+    const outcome = await extractCardFields(
+      bytes.toString("base64"),
+      "image/jpeg",
+      fakeVisionOk({ fullName: "Portrait Person", company: "Portrait Co", jobTitle: null, email: null, phone: null, linkedinUrl: null, confidence: {} })
+    );
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.result.fullName, "Portrait Person");
+  });
+
+  test("a real landscape-orientation image file round-trips through extraction with a mocked model response", async () => {
+    const bytes = fs.readFileSync(LANDSCAPE_FIXTURE);
+    const outcome = await extractCardFields(
+      bytes.toString("base64"),
+      "image/jpeg",
+      fakeVisionOk({ fullName: "Landscape Person", company: "Landscape Co", jobTitle: null, email: null, phone: null, linkedinUrl: null, confidence: {} })
+    );
+    assert.equal(outcome.ok, true);
+    if (!outcome.ok) return;
+    assert.equal(outcome.result.fullName, "Landscape Person");
   });
 });
 
@@ -116,7 +190,7 @@ describe("Sprint 06E.1 — extraction never writes to the CRM, and populated for
   test("5. extraction does not write any CRM record", async () => {
     const accountsBefore = await prisma!.account.count();
     const contactsBefore = await prisma!.contact.count();
-    const vision = fakeVisionReturning({
+    const vision = fakeVisionOk({
       fullName: "No Write Person",
       company: "No Write Co",
       jobTitle: null,
@@ -131,8 +205,6 @@ describe("Sprint 06E.1 — extraction never writes to the CRM, and populated for
   });
 
   test("6/7. populate-only-empty-fields semantics — simulated form merge only fills blanks and never overwrites what's already entered", () => {
-    // The actual merge logic lives client-side (setFullName(prev => prev || extracted)),
-    // exercised here as a pure function mirroring that exact rule.
     function mergeOnlyEmpty(current: Record<string, string>, extracted: Record<string, string | null>) {
       const merged = { ...current };
       for (const [key, value] of Object.entries(extracted)) {
@@ -152,7 +224,7 @@ describe("Sprint 06E.1 — extraction never writes to the CRM, and populated for
 
   test("8. a failed extraction preserves current form field values (no field is cleared)", () => {
     function mergeOnlyEmpty(current: Record<string, string>, extracted: Record<string, string | null> | null) {
-      if (!extracted) return current; // failure path — nothing changes
+      if (!extracted) return current;
       const merged = { ...current };
       for (const [key, value] of Object.entries(extracted)) {
         if (!merged[key] && value) merged[key] = value;
