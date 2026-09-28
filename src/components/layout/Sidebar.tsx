@@ -120,7 +120,7 @@ function SidebarInner() {
       {/* Quick Capture (Sprint 06E) — global, always one tap away */}
       <div className="shrink-0 px-3 pb-2">
         <Link
-          href="/capture/event"
+          href="/capture/quick"
           className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-brand-950 text-[13px] font-semibold hover:from-amber-300 hover:to-amber-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300"
         >
           <Zap size={15} strokeWidth={2} aria-hidden />

@@ -101,7 +101,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             </Link>
           )}
           <ExportButton entity="leads" />
-          <Link href={`/capture/event${product ? `?product=${product}` : ""}`} className="btn-secondary border-amber-200 text-amber-700 hover:bg-amber-50">
+          <Link href="/capture/quick" className="btn-secondary border-amber-200 text-amber-700 hover:bg-amber-50">
             <Zap size={15} aria-hidden /> Quick Capture
           </Link>
           <Link href={`/leads/new${product ? `?product=${product}` : ""}`} className="btn-primary">
