@@ -14,9 +14,12 @@ export async function POST(req: NextRequest) {
   const accounts = company ? await prisma.account.findMany({ where: { name: { contains: company, mode: "insensitive" } }, select: { id: true, name: true }, take: 10 }) : [];
   const accountMatches = accounts.filter((account) => normalizeName(account.name) === normalizeName(company!));
   const contacts = name ? await prisma.contact.findMany({
-    where: accountMatches.length ? { accountId: { in: accountMatches.map((account) => account.id) } } : {},
+    where: {
+      firstName: { contains: name.split(/\s+/)[0], mode: "insensitive" },
+      ...(accountMatches.length ? { accountId: { in: accountMatches.map((account) => account.id) } } : {}),
+    },
     include: { account: { select: { name: true } } },
-    take: accountMatches.length ? 100 : 200,
+    take: 100,
   }) : [];
   const contactMatches = contacts.filter((contact) => normalizeName(`${contact.firstName} ${contact.lastName}`) === normalizeName(name!));
   return NextResponse.json({
