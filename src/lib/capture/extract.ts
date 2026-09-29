@@ -22,7 +22,16 @@ export async function extractCaptureContext(transcript: string, today = new Date
       signal: AbortSignal.timeout(25_000),
     });
     if (!response.ok) {
-      console.error(`Quick Capture extraction failed: provider status ${response.status}`);
+      let errorType = "unknown";
+      let errorMessage = "";
+      try {
+        const errorBody = await response.json();
+        if (typeof errorBody?.error?.type === "string") errorType = errorBody.error.type;
+        if (typeof errorBody?.error?.message === "string") errorMessage = errorBody.error.message.slice(0, 300).replaceAll(apiKey, "[redacted]");
+      } catch {
+        // The provider error body may not be JSON.
+      }
+      console.error(`Quick Capture extraction failed: provider status ${response.status} type=${errorType} message=${errorMessage}`);
       return null;
     }
     const body = await response.json();
