@@ -50,6 +50,7 @@ export default function QuickCapturePage() {
   const [hydrated, setHydrated] = useState(false);
   const recognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null);
   const speechBase = useRef("");
+  const captureVersion = useRef(0);
 
   useEffect(() => {
     const savedDraft = localStorage.getItem(STORAGE_KEY);
@@ -93,35 +94,41 @@ export default function QuickCapturePage() {
     recognition.continuous = true;
     recognition.interimResults = false;
     speechBase.current = transcript.trim();
+    const version = captureVersion.current;
     recognition.onresult = (event: any) => {
+      if (version !== captureVersion.current) return;
       const spoken = Array.from(event.results as ArrayLike<any>).map((result: any) => result[0].transcript).join(" ").trim();
       setTranscript([speechBase.current, spoken].filter(Boolean).join(" "));
     };
-    recognition.onerror = () => setMessage("Dictation stopped. Your transcript is kept; use the phone keyboard if needed.");
-    recognition.onend = () => setListening(false);
+    recognition.onerror = () => { if (version === captureVersion.current) setMessage("Dictation stopped. Your transcript is kept; use the phone keyboard if needed."); };
+    recognition.onend = () => { if (version === captureVersion.current) setListening(false); };
     recognitionRef.current = recognition;
     try { recognition.start(); setListening(true); setMessage(""); }
     catch { setMessage("Speech recognition is unavailable. Use keyboard dictation or type your debrief."); }
   }
 
   async function findMatches(next: Review) {
+    const version = captureVersion.current;
     try {
       const res = await fetch("/api/capture/quick/matches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: next.personName, company: next.companyName, email: next.email, phone: next.phone }) });
       if (!res.ok) return;
       const data = await res.json();
+      if (version !== captureVersion.current) return;
       setMatches(data.contacts ?? []);
       setAccounts(data.accounts ?? []);
-    } catch { setMessage("Match search unavailable. Review carefully before saving."); }
+    } catch { if (version === captureVersion.current) setMessage("Match search unavailable. Review carefully before saving."); }
   }
 
   async function processDebrief() {
     if (!transcript.trim() || processing) return;
+    const version = captureVersion.current;
     recognitionRef.current?.stop();
     setProcessing(true); setMessage("");
     try {
       const res = await fetch("/api/capture/quick/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcript }) });
       if (!res.ok) throw new Error("suggestion failed");
       const data = await res.json();
+      if (version !== captureVersion.current) return;
       const s: QuickSuggestion | null = data.suggestion;
       setSuggestion(s);
       const next = s ? {
@@ -136,10 +143,11 @@ export default function QuickCapturePage() {
       if (!s) setMessage("Automatic extraction is unavailable. Fill the review fields from your debrief, then save.");
       setStage("review");
     } catch {
+      if (version !== captureVersion.current) return;
       setReview({ ...EMPTY_REVIEW, conversationSummary: transcript });
       setStage("review");
       setMessage("Extraction failed. Your debrief is safe here; fill the review fields manually.");
-    } finally { setProcessing(false); }
+    } finally { if (version === captureVersion.current) setProcessing(false); }
   }
 
   async function save() {
@@ -154,9 +162,17 @@ export default function QuickCapturePage() {
     finally { setSaving(false); }
   }
 
-  function captureAnother() {
+  function newCapture() {
+    const hasUnsavedReview = stage !== "saved" && (stage === "review" || Object.values(review).some(Boolean));
+    if (hasUnsavedReview && !window.confirm("Discard this reviewed capture and start a new one?")) return;
+    captureVersion.current += 1;
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    speechBase.current = "";
+    setListening(false);
     setTranscript(""); setReview(EMPTY_REVIEW); setMatches([]); setAccounts([]); setSuggestion(null);
-    setKey(crypto.randomUUID()); setSaved(null); setMessage(""); setStage("capture");
+    setKey(crypto.randomUUID()); setSaved(null); setMessage(""); setProcessing(false); setSaving(false); setStage("capture");
+    localStorage.removeItem(STORAGE_KEY);
   }
 
   const input = (field: keyof Review, label: string, state: "EXTRACTED" | "AI_INTERPRETATION" | "USER_STATED" = "EXTRACTED", multiline = false) => (
@@ -167,8 +183,8 @@ export default function QuickCapturePage() {
     </label>
   );
 
-  return <div className="max-w-lg mx-auto p-4 pb-28 space-y-4">
-    <div><Link href="/" className="text-sm text-gray-500">← CRM</Link><h1 className="text-2xl font-bold mt-1">Quick Capture</h1><p className="text-sm text-gray-600">Post-conversation debrief · {eventName}</p></div>
+  return <div className={`max-w-lg mx-auto p-4 space-y-4 ${stage === "review" ? "pb-32" : "pb-28"}`}>
+    <div className="flex items-start justify-between gap-3"><div><Link href="/" className="text-sm text-gray-500">← CRM</Link><h1 className="text-2xl font-bold mt-1">Quick Capture</h1><p className="text-sm text-gray-600">Post-conversation debrief · {eventName}</p></div>{stage === "capture" && <button type="button" onClick={newCapture} disabled={!hydrated || saving} className="btn-secondary min-h-11 px-3 shrink-0 disabled:opacity-50">New capture</button>}</div>
     {message && <div role="alert" className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">{message}</div>}
 
     {stage === "capture" && <>
@@ -215,9 +231,9 @@ export default function QuickCapturePage() {
         <label className="block text-sm font-semibold">CRM owner<select value={ownerId} onChange={(e) => { setOwnerId(e.target.value); localStorage.setItem("arqone-crm.currentUserId", e.target.value); }} className="input w-full mt-1 py-3"><option value="">Choose owner</option>{members.map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
       </div>
       <details className="text-sm text-gray-600"><summary className="cursor-pointer">Original debrief · source visible</summary><p className="whitespace-pre-wrap mt-2">{transcript}</p><button onClick={() => setStage("capture")} className="text-brand-700 underline mt-2">Edit debrief</button></details>
-      <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t p-3 flex gap-2"><button onClick={() => setStage("capture")} className="btn-secondary py-3 px-4">Back</button><button onClick={save} disabled={saving || !ownerId} className="btn-primary flex-1 justify-center py-3 text-base disabled:opacity-50">{saving ? "Saving…" : "Confirm & Save"}</button></div>
+      <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t p-3 space-y-2"><button type="button" onClick={newCapture} disabled={saving} className="btn-secondary w-full min-h-11 justify-center disabled:opacity-50">New capture</button><div className="flex gap-2"><button onClick={() => setStage("capture")} className="btn-secondary min-h-11 px-4">Back</button><button onClick={save} disabled={saving || !ownerId} className="btn-primary flex-1 justify-center min-h-11 text-base disabled:opacity-50">{saving ? "Saving…" : "Confirm & Save"}</button></div></div>
     </>}
 
-    {stage === "saved" && saved && <div className="card p-6 space-y-4 text-center"><div className="mx-auto rounded-full bg-green-100 text-green-700 w-14 h-14 flex items-center justify-center"><Check /></div><h2 className="text-xl font-bold">Saved</h2><p className="text-xs text-green-700 font-semibold">USER_CONFIRMED</p><p className="text-sm text-gray-600">{saved.contactId ? "Contact linked" : "No person invented"} · Activity saved{saved.taskId ? " · Task saved" : ""}</p><button onClick={captureAnother} className="btn-primary w-full justify-center py-4 text-base"><RotateCcw size={17} /> Capture another</button>{saved.contactId && <Link href={`/contacts/${saved.contactId}`} className="btn-secondary w-full justify-center py-3">Open contact</Link>}{saved.leadId && <Link href={`/leads/${saved.leadId}`} className="btn-secondary w-full justify-center py-3">Open lead</Link>}</div>}
+    {stage === "saved" && saved && <div className="card p-6 space-y-4 text-center"><div className="mx-auto rounded-full bg-green-100 text-green-700 w-14 h-14 flex items-center justify-center"><Check /></div><h2 className="text-xl font-bold">Saved</h2><p className="text-xs text-green-700 font-semibold">USER_CONFIRMED</p><p className="text-sm text-gray-600">{saved.contactId ? "Contact linked" : "No person invented"} · Activity saved{saved.taskId ? " · Task saved" : ""}</p><button onClick={newCapture} className="btn-primary w-full justify-center py-4 text-base"><RotateCcw size={17} /> New capture</button>{saved.contactId && <Link href={`/contacts/${saved.contactId}`} className="btn-secondary w-full justify-center py-3">Open contact</Link>}{saved.leadId && <Link href={`/leads/${saved.leadId}`} className="btn-secondary w-full justify-center py-3">Open lead</Link>}</div>}
   </div>;
 }
