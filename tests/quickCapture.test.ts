@@ -10,6 +10,7 @@ test("LiveX debrief: dates use the next named Dubai weekday", () => {
   assert.equal(resolveDueDate("follow up Wednesday", monday), "2026-09-30");
   assert.equal(resolveDueDate("Follow up next week", monday), "2026-10-05");
   assert.equal(resolveDueDate("No date agreed", monday), null);
+  assert.equal(resolveDueDate("follow up next Tuesday", new Date("2026-09-30T12:00:00Z")), "2026-10-06");
 });
 
 test("unknown person stays unknown, while company and product remain review suggestions", () => {

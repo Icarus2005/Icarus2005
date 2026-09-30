@@ -42,7 +42,7 @@ export async function saveQuickCapture(input: QuickSaveInput): Promise<QuickSave
   if (!/^[0-9a-f-]{36}$/i.test(input.idempotencyKey)) throw new QuickCaptureError("Invalid capture key.");
   if (!input.ownerId) throw new QuickCaptureError("Choose the CRM owner before saving.");
   if (!input.transcript.trim() || input.transcript.length > 5000) throw new QuickCaptureError("Debrief must be 1–5000 characters.");
-  if (!input.eventName.trim() || !validDate(input.eventDate) || !input.location.trim()) throw new QuickCaptureError("Event, date and location are required.");
+  if (input.eventDate && !validDate(input.eventDate)) throw new QuickCaptureError("Invalid event date.");
   if (input.dueDate && !validDate(input.dueDate)) throw new QuickCaptureError("Invalid task due date.");
   if (input.productKey && !isProductKey(input.productKey)) throw new QuickCaptureError("Choose a valid product.");
   if (input.personName.trim() && !input.companyName.trim() && !input.contactId) throw new QuickCaptureError("Choose an existing contact or enter a company for a new person.");
@@ -57,6 +57,8 @@ export async function saveQuickCapture(input: QuickSaveInput): Promise<QuickSave
 
   const owner = await prisma.teamMember.findUnique({ where: { id: input.ownerId }, select: { active: true } });
   if (!owner?.active) throw new QuickCaptureError("Choose an active CRM owner.");
+  const eventName = input.eventName.trim();
+  const eventContext = Boolean(eventName);
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -99,8 +101,9 @@ export async function saveQuickCapture(input: QuickSaveInput): Promise<QuickSave
         contact = await tx.contact.create({ data: {
           firstName, lastName: last.join(" ") || "", accountId: account!.id,
           email: input.email.trim() || null, phone: input.phone.trim() || null,
-          sourceType: LIVE_X_CONTEXT.sourceType, sourceDetail: input.eventName.trim(),
-          acquisitionPath: LIVE_X_CONTEXT.acquisitionPath, relationshipStrength: "MET",
+          sourceType: eventContext ? LIVE_X_CONTEXT.sourceType : null, sourceDetail: eventName || null,
+          acquisitionPath: eventContext ? LIVE_X_CONTEXT.acquisitionPath : null,
+          relationshipStrength: eventContext ? "MET" : null,
         }, include: { account: true } });
       }
 
@@ -110,15 +113,16 @@ export async function saveQuickCapture(input: QuickSaveInput): Promise<QuickSave
         if (!lead && creatingContact) lead = await tx.lead.create({ data: {
           name: `${contact.firstName} ${contact.lastName}`.trim(), company: account.name,
           primaryProduct: input.productKey || "UNASSIGNED", status: "NEW", ownerId: input.ownerId,
-          sourceType: LIVE_X_CONTEXT.sourceType, sourceDetail: input.eventName.trim(),
+          sourceType: eventContext ? LIVE_X_CONTEXT.sourceType : null, sourceDetail: eventName || null,
           accountId: account.id, primaryContactId: contact.id,
         } });
       }
 
       const activityNotes = [
-        `Event: ${input.eventName.trim()} (${input.eventDate})`,
-        `Location: ${input.location.trim()}`,
-        "Source: EVENT | Acquisition: IN_PERSON | Interaction: MET_PERSONALLY",
+        eventContext ? `Event: ${eventName}${input.eventDate ? ` (${input.eventDate})` : ""}` : null,
+        !eventContext && input.eventDate ? `Context date: ${input.eventDate}` : null,
+        input.location.trim() ? `Location: ${input.location.trim()}` : null,
+        eventContext ? "Source: EVENT | Acquisition: IN_PERSON | Interaction: MET_PERSONALLY" : null,
         input.personName.trim() ? `Person: ${input.personName.trim()}` : "Person: unknown",
         input.companyName.trim() ? `Company: ${input.companyName.trim()}` : null,
         input.statedRole.trim() ? `Stated role: ${input.statedRole.trim()}` : null,
@@ -130,7 +134,8 @@ export async function saveQuickCapture(input: QuickSaveInput): Promise<QuickSave
         `Original debrief: ${input.transcript.trim()}`,
       ].filter(Boolean).join("\n");
       const activity = await tx.activity.create({ data: {
-        type: "EVENT_INTERACTION", subject: `${input.eventName.trim()} — met personally`,
+        type: eventContext ? "EVENT_INTERACTION" : "NOTE",
+        subject: eventContext ? `${eventName} — met personally` : "Quick Capture — conversation",
         notes: activityNotes, date: new Date(), product: input.productKey || null,
         ownerId: input.ownerId, accountId: account?.id ?? null, contactId: contact?.id ?? null,
         leadId: lead?.id ?? null, idempotencyKey: input.idempotencyKey,

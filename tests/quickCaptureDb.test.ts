@@ -34,6 +34,25 @@ test("LiveX Quick Capture writes known, unknown and existing contacts without du
   assert.equal(unknown.leadId, null);
   assert.ok(unknown.accountId && unknown.activityId && unknown.taskId);
 
+  const noEvent = await saveQuickCapture({
+    ...base, idempotencyKey: randomUUID(),
+    transcript: "I met Sarah Ahmed from Company XYZ. She is Head of Operations. We discussed PlacePulse and agreed I should follow up next Tuesday.",
+    eventName: "", eventDate: "", location: "", personName: "Sarah Ahmed", companyName: `Company XYZ ${suffix}`,
+    statedRole: "Head of Operations", conversationSummary: "Discussed PlacePulse and agreed to follow up.",
+    relationshipContext: "", theirCommitment: "", myCommitment: "", nextAction: "Follow up", dueDate: "2026-10-06",
+    notes: "", email: "", phone: "", contactId: "", accountId: "",
+  });
+  assert.ok(noEvent.contactId && noEvent.activityId && noEvent.taskId);
+  const noEventActivity = await prisma.activity.findUniqueOrThrow({ where: { id: noEvent.activityId } });
+  const noEventContact = await prisma.contact.findUniqueOrThrow({ where: { id: noEvent.contactId! } });
+  const noEventTask = await prisma.task.findUniqueOrThrow({ where: { id: noEvent.taskId! } });
+  assert.equal(noEventActivity.type, "NOTE");
+  assert.doesNotMatch(noEventActivity.notes || "", /Source: EVENT|Their stated commitment:|My commitment:/);
+  assert.equal(noEventContact.sourceType, null);
+  assert.equal(noEventContact.email, null);
+  assert.equal(noEventContact.phone, null);
+  assert.equal(noEventTask.dueDate?.toISOString().slice(0, 10), "2026-10-06");
+
   const repeat = await saveQuickCapture({ ...base, idempotencyKey: randomUUID(), transcript: "I just met Ahmed again. The proposal is under internal review. Follow up next week.", contactId: first.contactId!, companyName: base.companyName, conversationSummary: "Proposal under internal review.", nextAction: "Follow up next week", dueDate: "2026-10-05" });
   assert.equal(repeat.contactId, first.contactId);
   assert.equal(await prisma.contact.count({ where: { id: first.contactId! } }), 1);
