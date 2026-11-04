@@ -71,18 +71,48 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function MobileNav({ pathname, product }: { pathname: string; product: string | null }) {
+  const links = [
+    { href: product ? `/?product=${product}` : "/", label: "Dashboard", icon: LayoutDashboard, active: pathname === "/" },
+    { href: product ? `/leads?product=${product}` : "/leads", label: "Leads", icon: Crosshair, active: pathname.startsWith("/leads") },
+    { href: product ? `/opportunities?product=${product}` : "/opportunities", label: "Pipeline", icon: BarChart3, active: pathname.startsWith("/opportunities") },
+    { href: "/admin/data-audit", label: "CRM Health", icon: ShieldCheck, active: pathname.startsWith("/admin/data-audit") },
+    { href: "/capture/quick", label: "Quick Capture", icon: Zap, active: pathname.startsWith("/capture") },
+  ];
+  return (
+    <nav className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-brand-950 px-3 md:hidden" aria-label="Mobile navigation">
+      <Link href="/" className="flex items-center gap-2" aria-label="ArqOne CRM dashboard">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-sm font-bold text-white">A</span>
+      </Link>
+      <div className="flex items-center gap-1">
+        {links.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              aria-label={item.label}
+              title={item.label}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg ${item.active ? "bg-brand-600 text-white" : "text-brand-200/70 hover:bg-white/10 hover:text-white"}`}
+            >
+              <Icon size={18} strokeWidth={1.8} aria-hidden />
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const rawProduct = searchParams.get("product");
   const product = rawProduct && isProductKey(rawProduct) ? rawProduct : null;
 
-  // Quick Capture (Sprint 06E) is a mobile-first, one-column flow — the
-  // fixed-width desktop sidebar would eat most of a phone viewport, so it
-  // doesn't render on /capture routes. This is the only route where the
-  // sidebar is hidden; every other page is unaffected.
-  if (pathname.startsWith("/capture")) return null;
-
+  // Quick Capture (Sprint 06E) is a mobile-first, one-column flow. Keep the
+  // compact mobile navigation available there, but never render the desktop
+  // sidebar over that flow.
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -90,8 +120,13 @@ function SidebarInner() {
   const withProduct = (href: string, carry?: boolean) =>
     carry && product ? `${href}?product=${product}` : href;
 
+  const mobileNav = <MobileNav pathname={pathname} product={product} />;
+  if (pathname.startsWith("/capture")) return mobileNav;
+
   return (
-    <aside className="w-60 shrink-0 bg-gradient-to-b from-brand-950 via-brand-950 to-[#12143d] flex flex-col h-screen overflow-hidden">
+    <>
+      {mobileNav}
+      <aside className="hidden w-60 shrink-0 bg-gradient-to-b from-brand-950 via-brand-950 to-[#12143d] md:flex flex-col h-screen overflow-hidden">
       {/* Logo — fixed at top */}
       <div className="shrink-0 px-5 py-5">
         <Link href="/" className="flex items-center gap-2.5">
@@ -226,14 +261,15 @@ function SidebarInner() {
       <div className="shrink-0 px-3 py-3 border-t border-white/5">
         <UserSwitcher />
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
 export default function Sidebar() {
   return (
     <Suspense
-      fallback={<aside className="w-60 shrink-0 bg-brand-950 h-screen" />}
+      fallback={<aside className="hidden w-60 shrink-0 bg-brand-950 h-screen md:block" />}
     >
       <SidebarInner />
     </Suspense>
