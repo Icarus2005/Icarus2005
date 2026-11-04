@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { key: string } }
+  { params }: { params: Promise<{ key: string }> }
 ) {
+  const { key } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = {};
   if (body.name !== undefined) data.name = String(body.name).trim();
@@ -17,8 +18,8 @@ export async function PUT(
       // Guard: a product that still owns records cannot be deactivated
       // without reassignment — surface the counts instead of silently hiding.
       const [leads, opps] = await Promise.all([
-        prisma.lead.count({ where: { primaryProduct: params.key } }),
-        prisma.opportunity.count({ where: { product: params.key, closedAt: null } }),
+        prisma.lead.count({ where: { primaryProduct: key } }),
+        prisma.opportunity.count({ where: { product: key, closedAt: null } }),
       ]);
       if (leads > 0 || opps > 0) {
         return NextResponse.json(
@@ -33,7 +34,7 @@ export async function PUT(
   }
 
   try {
-    const product = await prisma.product.update({ where: { key: params.key }, data });
+    const product = await prisma.product.update({ where: { key: key }, data });
     return NextResponse.json(product);
   } catch {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });

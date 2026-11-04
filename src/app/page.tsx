@@ -76,10 +76,11 @@ async function getDashboardData(product: string) {
 }
 
 export default async function DashboardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { product?: string };
+  searchParams: Promise<{ product?: string }>;
 }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const [{ leads, opportunities, overdueTasks, recentActivities, monthEnd, now }, pipelines] =
     await Promise.all([getDashboardData(product ?? ""), getPipelines()]);

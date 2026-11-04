@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const account = await prisma.account.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       contacts: true,
       opportunities: { orderBy: { createdAt: "desc" } },
@@ -24,12 +25,13 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   if (body.locationsCount !== undefined) body.locationsCount = Number(body.locationsCount) || null;
   const account = await prisma.account.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(account);
@@ -37,8 +39,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.account.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.account.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

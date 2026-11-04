@@ -4,9 +4,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ProposalDetail from "./ProposalDetail";
 
-export default async function ProposalPage({ params }: { params: { id: string } }) {
+export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const proposal = await prisma.proposal.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       account: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },

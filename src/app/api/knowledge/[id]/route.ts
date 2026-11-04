@@ -5,8 +5,9 @@ import { isKnowledgeKind } from "@/lib/proposals/knowledge";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = {};
 
@@ -36,7 +37,7 @@ export async function PUT(
   if (body.active !== undefined) data.active = Boolean(body.active);
 
   try {
-    const entry = await prisma.proposalKnowledge.update({ where: { id: params.id }, data });
+    const entry = await prisma.proposalKnowledge.update({ where: { id: id }, data });
     return NextResponse.json(entry);
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -45,10 +46,11 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    await prisma.proposalKnowledge.delete({ where: { id: params.id } });
+    await prisma.proposalKnowledge.delete({ where: { id: id } });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

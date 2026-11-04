@@ -23,8 +23,9 @@ async function getLead(id: string) {
   });
 }
 
-export default async function LeadDetailPage({ params }: { params: { id: string } }) {
-  const lead = await getLead(params.id);
+export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const lead = await getLead(id);
   if (!lead) notFound();
 
   return (

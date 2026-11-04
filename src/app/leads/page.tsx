@@ -50,7 +50,8 @@ function leadsWhere(sp: SearchParams) {
   };
 }
 
-export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function LeadsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const pageNum = Math.max(1, parseInt(searchParams.page ?? "1") || 1);
   const where = leadsWhere(searchParams);

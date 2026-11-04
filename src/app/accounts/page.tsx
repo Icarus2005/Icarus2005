@@ -41,7 +41,8 @@ async function getAccounts(sp: SearchParams) {
   });
 }
 
-export default async function AccountsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function AccountsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const accounts = await getAccounts(searchParams);
 

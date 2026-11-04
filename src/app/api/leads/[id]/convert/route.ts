@@ -3,11 +3,12 @@ import { convertLeadToOpportunity, LeadConversionError } from "@/lib/leadConvers
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await req.json().catch(() => ({}));
-    const result = await convertLeadToOpportunity(params.id, body);
+    const result = await convertLeadToOpportunity(id, body);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof LeadConversionError) {

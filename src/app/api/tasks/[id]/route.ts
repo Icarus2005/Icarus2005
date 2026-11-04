@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   if ("dueDate" in body) body.dueDate = body.dueDate ? new Date(body.dueDate) : null;
   if ("clientCommitmentDate" in body) body.clientCommitmentDate = body.clientCommitmentDate ? new Date(body.clientCommitmentDate) : null;
   const task = await prisma.task.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(task);
@@ -17,8 +18,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.task.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.task.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

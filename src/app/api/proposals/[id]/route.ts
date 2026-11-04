@@ -5,10 +5,11 @@ import { isProposalStage } from "@/lib/proposals/stages";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const proposal = await prisma.proposal.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       account: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
@@ -23,8 +24,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = {};
 
@@ -54,11 +56,11 @@ export async function PUT(
   }
 
   try {
-    const proposal = await prisma.proposal.update({ where: { id: params.id }, data });
+    const proposal = await prisma.proposal.update({ where: { id: id }, data });
     if (body.stage !== undefined) {
       await prisma.proposalEvent.create({
         data: {
-          proposalId: params.id,
+          proposalId: id,
           stage: body.stage,
           status: "COMPLETED",
           detail: "Stage set manually",
@@ -73,10 +75,11 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    await prisma.proposal.delete({ where: { id: params.id } });
+    await prisma.proposal.delete({ where: { id: id } });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

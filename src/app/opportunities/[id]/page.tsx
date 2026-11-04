@@ -35,8 +35,9 @@ function fmt(n: number) {
   return `$${n}`;
 }
 
-export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
-  const opp = await getOpportunity(params.id);
+export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const opp = await getOpportunity(id);
   if (!opp) notFound();
   const primaryStakeholder = opp.contacts.find((c) => c.isPrimary)?.contact ?? null;
 

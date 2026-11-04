@@ -61,10 +61,11 @@ async function getOpportunities(sp: SearchParams) {
 }
 
 export default async function OpportunitiesPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const view = searchParams.view ?? "pipeline";
   const [opportunities, pipelines, owners] = await Promise.all([

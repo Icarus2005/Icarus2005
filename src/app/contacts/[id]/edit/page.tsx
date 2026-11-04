@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CONTACT_ROLES } from "@/lib/constants";
 
-export default function EditContactPage({ params }: { params: { id: string } }) {
+export default function EditContactPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [contact, setContact] = useState<Record<string, string> | null>(null);
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
@@ -14,13 +15,13 @@ export default function EditContactPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/contacts/${params.id}`).then((r) => r.json()),
+      fetch(`/api/contacts/${id}`).then((r) => r.json()),
       fetch("/api/accounts").then((r) => r.json()),
     ]).then(([c, a]) => {
       setContact(c);
       setAccounts(a);
     });
-  }, [params.id]);
+  }, [id]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -28,13 +29,13 @@ export default function EditContactPage({ params }: { params: { id: string } }) 
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ""));
-    const res = await fetch(`/api/contacts/${params.id}`, {
+    const res = await fetch(`/api/contacts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (res.ok) {
-      router.push(`/contacts/${params.id}`);
+      router.push(`/contacts/${id}`);
     } else {
       setError("Failed to save.");
       setSaving(false);
@@ -46,7 +47,7 @@ export default function EditContactPage({ params }: { params: { id: string } }) 
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <Link href={`/contacts/${params.id}`} className="text-sm text-gray-500 hover:text-gray-700">
+        <Link href={`/contacts/${id}`} className="text-sm text-gray-500 hover:text-gray-700">
           ← {contact.firstName} {contact.lastName}
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 mt-2">Edit Contact</h1>
@@ -109,7 +110,7 @@ export default function EditContactPage({ params }: { params: { id: string } }) 
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? "Saving..." : "Save Changes"}
           </button>
-          <Link href={`/contacts/${params.id}`} className="btn-secondary">Cancel</Link>
+          <Link href={`/contacts/${id}`} className="btn-secondary">Cancel</Link>
         </div>
       </form>
     </div>

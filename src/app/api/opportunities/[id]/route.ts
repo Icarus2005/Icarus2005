@@ -5,10 +5,11 @@ import { getPipelineForProduct } from "@/lib/catalog";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const opp = await prisma.opportunity.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       account: true,
       owner: { select: { id: true, name: true } },
@@ -28,8 +29,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   if (body.value !== undefined) body.value = Number(body.value) || null;
   if (body.probability !== undefined) body.probability = Number(body.probability) || null;
@@ -42,7 +44,7 @@ export async function PUT(
   }
 
   const existing = await prisma.opportunity.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { product: true, stage: true, closedAt: true, pipelineId: true },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -81,7 +83,7 @@ export async function PUT(
   }
 
   const opp = await prisma.opportunity.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(opp);
@@ -89,8 +91,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.opportunity.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.opportunity.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

@@ -56,7 +56,8 @@ const TYPE_COLORS: Record<string, string> = {
   DEMO: "bg-purple-100 text-purple-700",
 };
 
-export default async function ActivitiesPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ActivitiesPage({ searchParams: searchParamsPromise }: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const [activities, owners, accounts] = await Promise.all([
     getActivities(searchParams),

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Building2, CheckCircle2, GitBranch, User } from "lucide-react";
 import ProductBadge from "@/components/ProductBadge";
@@ -34,7 +34,8 @@ type Pipeline = {
   stages: { id: string; key: string; name: string; isWon: boolean; isLost: boolean; active: boolean; defaultProbability: number }[];
 };
 
-export default function ConvertLeadPage({ params }: { params: { id: string } }) {
+export default function ConvertLeadPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -50,7 +51,7 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/leads/${params.id}`).then((r) => {
+      fetch(`/api/leads/${id}`).then((r) => {
         if (!r.ok) throw new Error();
         return r.json();
       }),
@@ -73,7 +74,7 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
         setNextTaskDueDate(taskDate ? taskDate.slice(0, 10) : "");
       })
       .catch(() => setLoadError("Could not load the lead."));
-  }, [params.id]);
+  }, [id]);
 
   if (loadError) {
     return (

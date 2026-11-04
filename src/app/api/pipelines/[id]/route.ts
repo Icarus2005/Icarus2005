@@ -7,13 +7,14 @@ import { prisma } from "@/lib/prisma";
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
 
   if (body.active === false) {
     const open = await prisma.opportunity.count({
-      where: { pipelineId: params.id, closedAt: null },
+      where: { pipelineId: id, closedAt: null },
     });
     if (open > 0) {
       return NextResponse.json(
@@ -29,7 +30,7 @@ export async function PUT(
 
   if (Object.keys(data).length > 0) {
     try {
-      await prisma.pipeline.update({ where: { id: params.id }, data });
+      await prisma.pipeline.update({ where: { id: id }, data });
     } catch {
       return NextResponse.json({ error: "Pipeline not found" }, { status: 404 });
     }
@@ -67,7 +68,7 @@ export async function PUT(
   }
 
   const pipeline = await prisma.pipeline.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: { stages: { orderBy: { order: "asc" } } },
   });
   return NextResponse.json(pipeline);
