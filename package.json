@@ -20,7 +20,7 @@
     "react-dom": "^18"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.15.12",
+    "@netlify/plugin-nextjs": "5.16.6",
     "@prisma/client": "^5.14.0",
     "@types/node": "^20",
     "@types/papaparse": "^5.3.14",
