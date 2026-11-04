@@ -10,6 +10,8 @@ export async function GET(
     where: { id: params.id },
     include: {
       owner: { select: { id: true, name: true } },
+      account: { select: { id: true, name: true } },
+      primaryContact: { select: { id: true, firstName: true, lastName: true, email: true } },
       activities: { orderBy: { date: "desc" }, take: 20 },
       tasks: { orderBy: { dueDate: "asc" } },
     },
