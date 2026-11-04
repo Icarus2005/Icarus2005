@@ -108,13 +108,22 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function latestActivity(activities: ActivityRef[]): Date | null {
+export function latestActivityDate(activities: ActivityRef[]): Date | null {
   if (activities.length === 0) return null;
   return new Date(Math.max(...activities.map((activity) => new Date(activity.date).getTime())));
 }
 
-function isOlderThan(value: Date | string, days: number, now: Date): boolean {
+export function isOlderThanDays(value: Date | string, days: number, now: Date): boolean {
   return new Date(value).getTime() < now.getTime() - days * DAY_MS;
+}
+
+export function isOpenOpportunityRecord(opportunity: {
+  stage: string;
+  stageRef?: { isWon: boolean; isLost: boolean } | null;
+  closedAt?: Date | string | null;
+}): boolean {
+  return !opportunity.closedAt &&
+    !(opportunity.stageRef?.isWon || opportunity.stageRef?.isLost || /^CLOSED_/i.test(opportunity.stage));
 }
 
 function record(
@@ -149,7 +158,7 @@ export function buildCrmHealth(
   thresholds: CrmHealthThresholds = CRM_HEALTH_THRESHOLDS
 ) {
   const openOpportunity = (opportunity: CrmHealthInput["opportunities"][number]) =>
-    !(opportunity.stageRef?.isWon || opportunity.stageRef?.isLost || /^CLOSED_/i.test(opportunity.stage));
+    isOpenOpportunityRecord(opportunity);
 
   const duplicateAccounts = duplicateRecords(
     input.accounts,
@@ -191,11 +200,11 @@ export function buildCrmHealth(
   const opportunitiesWithoutRecentActivity = input.opportunities
     .filter((opportunity) => {
       if (!openOpportunity(opportunity)) return false;
-      const latest = latestActivity(opportunity.activities);
-      return !latest || isOlderThan(latest, thresholds.recentOpportunityActivityDays, now);
+      const latest = latestActivityDate(opportunity.activities);
+      return !latest || isOlderThanDays(latest, thresholds.recentOpportunityActivityDays, now);
     })
     .map((opportunity) => {
-      const latest = latestActivity(opportunity.activities);
+      const latest = latestActivityDate(opportunity.activities);
       return record("opportunity", opportunity.id, opportunity.name, `/opportunities/${opportunity.id}`, {
         actionHref: `/activities/new?opportunityId=${opportunity.id}&product=${opportunity.product}`,
         actionLabel: "Log activity",
@@ -261,15 +270,15 @@ export function buildCrmHealth(
   const staleLeads = input.leads
     .filter((lead) => {
       if (lead.convertedOpportunityId || lead.status === "DISQUALIFIED") return false;
-      const latest = latestActivity(lead.activities);
-      return isOlderThan(latest ?? lead.createdAt, thresholds.staleLeadDays, now);
+      const latest = latestActivityDate(lead.activities);
+      return isOlderThanDays(latest ?? lead.createdAt, thresholds.staleLeadDays, now);
     })
     .map((lead) => record("lead", lead.id, lead.name, `/leads/${lead.id}`, { actionHref: `/activities/new?leadId=${lead.id}&product=${lead.primaryProduct}`, actionLabel: "Log activity", detail: `No activity in ${thresholds.staleLeadDays}+ days` }));
   const staleAccounts = input.accounts
-    .filter((account) => isOlderThan(latestActivity(account.activities) ?? account.createdAt, thresholds.staleRelationshipDays, now))
+    .filter((account) => isOlderThanDays(latestActivityDate(account.activities) ?? account.createdAt, thresholds.staleRelationshipDays, now))
     .map((account) => record("account", account.id, account.name, `/accounts/${account.id}`, { actionHref: `/activities/new?accountId=${account.id}`, actionLabel: "Log activity", detail: `No account activity in ${thresholds.staleRelationshipDays}+ days` }));
   const staleContacts = input.contacts
-    .filter((contact) => isOlderThan(latestActivity(contact.activities) ?? contact.createdAt, thresholds.staleRelationshipDays, now))
+    .filter((contact) => isOlderThanDays(latestActivityDate(contact.activities) ?? contact.createdAt, thresholds.staleRelationshipDays, now))
     .map((contact) => record("contact", contact.id, `${contact.firstName} ${contact.lastName}`, `/contacts/${contact.id}`, { actionHref: `/activities/new?contactId=${contact.id}&accountId=${contact.accountId}`, actionLabel: "Log activity", detail: `No contact activity in ${thresholds.staleRelationshipDays}+ days` }));
 
   const issues: CrmHealthIssue[] = [
