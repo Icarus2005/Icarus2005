@@ -33,9 +33,10 @@ function EmptyState({ icon: Icon, children }: { icon: typeof CheckCircle2; child
 
 function TodayList({ items }: { items: TodayAction[] }) {
   if (items.length === 0) return <EmptyState icon={CheckCircle2}>No overdue, due-today or missing qualified-Lead actions.</EmptyState>;
+  const visibleItems = items.slice(0, 12);
   return (
     <div className="space-y-2.5">
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const style = todayStyles[item.timing];
         return (
           <article key={item.key} className={`rounded-xl border border-gray-100 border-l-4 ${style.border} bg-white p-3.5`}>
@@ -62,16 +63,33 @@ function TodayList({ items }: { items: TodayAction[] }) {
           </article>
         );
       })}
+      {items.length > visibleItems.length && (
+        <p className="px-2 pt-1 text-center text-[11px] text-gray-400">
+          Showing the 12 highest-priority actions of {items.length}. Open All Tasks for the full list.
+        </p>
+      )}
     </div>
   );
 }
 
 function AtRiskList({ items }: { items: AtRiskItem[] }) {
   if (items.length === 0) return <EmptyState icon={CheckCircle2}>No open deals or active Leads currently match an At Risk rule.</EmptyState>;
+  const opportunities = items.filter((item) => item.entity === "opportunity");
+  const leads = items.filter((item) => item.entity === "lead");
+  const groups = [
+    { label: "Opportunities needing attention", items: opportunities.slice(0, 6), total: opportunities.length },
+    { label: "Highest-priority Leads", items: leads.slice(0, 8), total: leads.length },
+  ].filter((group) => group.total > 0);
   return (
-    <div className="space-y-2.5">
-      {items.map((item) => (
-        <article key={item.key} className="rounded-xl border border-amber-100 bg-amber-50/30 p-3.5">
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <div key={group.label} className="space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{group.label}</h3>
+            <span className="text-[11px] text-gray-400">{group.total}</span>
+          </div>
+          {group.items.map((item) => (
+            <article key={item.key} className="rounded-xl border border-amber-100 bg-amber-50/30 p-3.5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -105,7 +123,14 @@ function AtRiskList({ items }: { items: AtRiskItem[] }) {
               {item.actionLabel}<ArrowRight size={12} aria-hidden />
             </Link>
           </div>
-        </article>
+            </article>
+          ))}
+          {group.total > group.items.length && (
+            <p className="px-2 text-center text-[11px] text-gray-400">
+              Showing {group.items.length} of {group.total}; CRM Health retains the complete review list.
+            </p>
+          )}
+        </div>
       ))}
     </div>
   );
