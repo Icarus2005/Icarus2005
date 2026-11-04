@@ -50,7 +50,7 @@ const WORK_NAV: NavItem[] = [
 // Reuses the existing /admin/data-audit route (see src/app/admin/data-audit)
 // — no new route, no change to its CRM_ACCESS_PASSWORD protection.
 const SYSTEM_NAV: NavItem[] = [
-  { href: "/admin/data-audit", label: "Admin", icon: ShieldCheck },
+  { href: "/admin/data-audit", label: "CRM Health", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
