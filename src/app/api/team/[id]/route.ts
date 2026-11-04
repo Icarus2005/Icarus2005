@@ -5,10 +5,11 @@ const VALID_ROLES = ["SALES_DIRECTOR", "SALES_EXECUTIVE", "VIEWER"];
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const member = await prisma.teamMember.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       _count: { select: { leads: true, opportunities: true, tasks: true } },
     },
@@ -19,8 +20,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = {};
 
@@ -31,7 +33,7 @@ export async function PUT(
 
   try {
     const member = await prisma.teamMember.update({
-      where: { id: params.id },
+      where: { id: id },
       data,
     });
     return NextResponse.json(member);
@@ -42,9 +44,10 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   // Owned records keep existing (ownerId is set null via onDelete: SetNull)
-  await prisma.teamMember.delete({ where: { id: params.id } });
+  await prisma.teamMember.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const contact = await prisma.contact.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       account: true,
       opportunities: { include: { opportunity: true } },
@@ -19,11 +20,12 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   const contact = await prisma.contact.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(contact);
@@ -31,8 +33,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.contact.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.contact.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

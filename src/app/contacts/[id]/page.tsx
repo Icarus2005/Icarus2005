@@ -17,8 +17,9 @@ async function getContact(id: string) {
   });
 }
 
-export default async function ContactDetailPage({ params }: { params: { id: string } }) {
-  const contact = await getContact(params.id);
+export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const contact = await getContact(id);
   if (!contact) notFound();
 
   return (

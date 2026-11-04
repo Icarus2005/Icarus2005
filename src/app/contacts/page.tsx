@@ -46,7 +46,8 @@ async function getContacts(sp: SearchParams) {
   });
 }
 
-export default async function ContactsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ContactsPage({ searchParams: searchParamsPromise }: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const contacts = await getContacts(searchParams);
 

@@ -29,9 +29,10 @@ async function getAccount(id: string) {
 export default async function AccountDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const account = await getAccount(params.id);
+  const { id } = await params;
+  const account = await getAccount(id);
   if (!account) notFound();
 
   const openDeals = account.opportunities.filter((o) => !o.closedAt);

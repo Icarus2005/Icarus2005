@@ -4,12 +4,15 @@ import { isProductKey, parseProductList } from "@/lib/products";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const lead = await prisma.lead.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       owner: { select: { id: true, name: true } },
+      account: { select: { id: true, name: true } },
+      primaryContact: { select: { id: true, firstName: true, lastName: true, email: true } },
       activities: { orderBy: { date: "desc" }, take: 20 },
       tasks: { orderBy: { dueDate: "asc" } },
     },
@@ -20,8 +23,9 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
 
   if (body.primaryProduct !== undefined && !isProductKey(body.primaryProduct)) {
@@ -42,7 +46,7 @@ export async function PUT(
   if (Array.isArray(body.markets)) body.markets = body.markets.join(",");
 
   const lead = await prisma.lead.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(lead);
@@ -50,8 +54,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.lead.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.lead.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }

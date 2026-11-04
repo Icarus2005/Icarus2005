@@ -4,11 +4,12 @@ import { deliverProposal } from "@/lib/proposals/pipeline";
 /** Phase 4 — creates/links the CRM Opportunity. Approved proposals only. */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json().catch(() => ({}));
   try {
-    const result = await deliverProposal(params.id, body.ownerId);
+    const result = await deliverProposal(id, body.ownerId);
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Delivery failed";

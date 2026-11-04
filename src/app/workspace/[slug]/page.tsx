@@ -19,9 +19,10 @@ import ProductBadge from "@/components/ProductBadge";
 export default async function ProductWorkspacePage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const meta = productBySlug(params.slug);
+  const { slug } = await params;
+  const meta = productBySlug(slug);
   if (!meta) notFound();
   const product = meta.key;
   const now = new Date();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { COUNTRIES, USE_CASES, parseMarkets } from "@/lib/constants";
 import { FORECAST_CATEGORIES, HEALTH_STATUSES, productLabel } from "@/lib/products";
@@ -16,7 +16,8 @@ type Pipeline = {
   stages: { id: string; key: string; name: string; isWon: boolean; isLost: boolean; active: boolean; defaultProbability: number }[];
 };
 
-export default function EditOpportunityPage({ params }: { params: { id: string } }) {
+export default function EditOpportunityPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [opp, setOpp] = useState<Record<string, unknown> | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -27,7 +28,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/opportunities/${params.id}`).then((r) => {
+      fetch(`/api/opportunities/${id}`).then((r) => {
         if (!r.ok) throw new Error();
         return r.json();
       }),
@@ -39,7 +40,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
         setMarkets(new Set(parseMarkets(String(o.markets ?? ""))));
       })
       .catch(() => setLoadError("Could not load this opportunity."));
-  }, [params.id]);
+  }, [id]);
 
   const pipeline = useMemo(
     () => pipelines.find((p) => p.productKey === (opp?.product as string) && p.active),
@@ -62,13 +63,13 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
       if (data[k] === "") body[k] = null;
     }
     body.decisionMakerEngaged = data.decisionMakerEngaged === "on";
-    const res = await fetch(`/api/opportunities/${params.id}`, {
+    const res = await fetch(`/api/opportunities/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (res.ok) {
-      router.push(`/opportunities/${params.id}`);
+      router.push(`/opportunities/${id}`);
       router.refresh();
     } else {
       const err = await res.json().catch(() => null);
@@ -99,7 +100,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <Link href={`/opportunities/${params.id}`} className="text-sm text-gray-500 hover:text-gray-700">
+        <Link href={`/opportunities/${id}`} className="text-sm text-gray-500 hover:text-gray-700">
           ← {String(opp.name)}
         </Link>
         <div className="flex items-center gap-3 mt-2">
@@ -234,7 +235,7 @@ export default function EditOpportunityPage({ params }: { params: { id: string }
           <button type="submit" disabled={saving} className="btn-primary disabled:opacity-60">
             {saving ? "Saving…" : "Save Changes"}
           </button>
-          <Link href={`/opportunities/${params.id}`} className="btn-secondary">Cancel</Link>
+          <Link href={`/opportunities/${id}`} className="btn-secondary">Cancel</Link>
         </div>
       </form>
     </div>

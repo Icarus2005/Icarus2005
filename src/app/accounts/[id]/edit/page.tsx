@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { GCC_COUNTRIES, SECTORS, COMPANY_SIZES } from "@/lib/constants";
 
-export default function EditAccountPage({ params }: { params: { id: string } }) {
+export default function EditAccountPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [account, setAccount] = useState<Record<string, string> | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/accounts/${params.id}`)
+    fetch(`/api/accounts/${id}`)
       .then((r) => r.json())
       .then(setAccount);
-  }, [params.id]);
+  }, [id]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,13 +24,13 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ""));
-    const res = await fetch(`/api/accounts/${params.id}`, {
+    const res = await fetch(`/api/accounts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (res.ok) {
-      router.push(`/accounts/${params.id}`);
+      router.push(`/accounts/${id}`);
     } else {
       setError("Failed to save. Please try again.");
       setSaving(false);
@@ -41,7 +42,7 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <Link href={`/accounts/${params.id}`} className="text-sm text-gray-500 hover:text-gray-700">
+        <Link href={`/accounts/${id}`} className="text-sm text-gray-500 hover:text-gray-700">
           ← {account.name}
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 mt-2">Edit Account</h1>
@@ -111,7 +112,7 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? "Saving..." : "Save Changes"}
           </button>
-          <Link href={`/accounts/${params.id}`} className="btn-secondary">Cancel</Link>
+          <Link href={`/accounts/${id}`} className="btn-secondary">Cancel</Link>
         </div>
       </form>
     </div>

@@ -10,10 +10,11 @@ import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
 
 export default async function ProposalsPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { product?: string };
+  searchParams: Promise<{ product?: string }>;
 }) {
+  const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const proposals = await prisma.proposal.findMany({
     where: product ? { product } : {},

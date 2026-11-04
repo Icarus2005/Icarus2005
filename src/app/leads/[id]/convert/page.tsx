@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Building2, GitBranch, User } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, GitBranch, User } from "lucide-react";
 import ProductBadge from "@/components/ProductBadge";
 import { productLabel, parseProductList } from "@/lib/products";
 import { marketLabels } from "@/lib/constants";
@@ -17,8 +17,13 @@ type Lead = {
   primaryProduct: string;
   secondaryProducts: string | null;
   estimatedValue: number | null;
+  nextAction: string | null;
+  nextActionDate: string | null;
   convertedOpportunityId: string | null;
   owner: { id: string; name: string } | null;
+  account: { id: string; name: string } | null;
+  primaryContact: { id: string; firstName: string; lastName: string; email: string | null } | null;
+  tasks: Array<{ id: string; title: string; dueDate: string | null; status: string; createdAt: string }>;
 };
 
 type Pipeline = {
@@ -29,7 +34,8 @@ type Pipeline = {
   stages: { id: string; key: string; name: string; isWon: boolean; isLost: boolean; active: boolean; defaultProbability: number }[];
 };
 
-export default function ConvertLeadPage({ params }: { params: { id: string } }) {
+export default function ConvertLeadPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [lead, setLead] = useState<Lead | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -39,11 +45,13 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
 
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [nextTaskTitle, setNextTaskTitle] = useState("");
+  const [nextTaskDueDate, setNextTaskDueDate] = useState("");
   const [secondarySelected, setSecondarySelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/leads/${params.id}`).then((r) => {
+      fetch(`/api/leads/${id}`).then((r) => {
         if (!r.ok) throw new Error();
         return r.json();
       }),
@@ -54,9 +62,19 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
         setPipelines(p);
         setName(`${productLabel(l.primaryProduct)} — ${l.company?.trim() || l.name}`);
         setValue(l.estimatedValue != null ? String(l.estimatedValue) : "");
+        const openTasks = l.tasks.filter((task) => task.status === "OPEN");
+        const existingTask = [...openTasks].sort((a, b) => {
+          if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          if (a.dueDate) return -1;
+          if (b.dueDate) return 1;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        })[0];
+        setNextTaskTitle(existingTask?.title ?? l.nextAction ?? "");
+        const taskDate = existingTask?.dueDate ?? l.nextActionDate;
+        setNextTaskDueDate(taskDate ? taskDate.slice(0, 10) : "");
       })
       .catch(() => setLoadError("Could not load the lead."));
-  }, [params.id]);
+  }, [id]);
 
   if (loadError) {
     return (
@@ -85,6 +103,12 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
   const initialStage = pipeline?.stages.find((s) => s.active && !s.isWon && !s.isLost);
   const secondaries = parseProductList(lead.secondaryProducts);
   const companyName = lead.company?.trim() || lead.name;
+  const existingTask = [...lead.tasks.filter((task) => task.status === "OPEN")].sort((a, b) => {
+    if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  })[0];
 
   function toggleSecondary(key: string) {
     const next = new Set(secondarySelected);
@@ -102,6 +126,8 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
       body: JSON.stringify({
         name: name.trim() || undefined,
         value: value !== "" ? Number(value) : undefined,
+        nextTaskTitle: nextTaskTitle.trim() || undefined,
+        nextTaskDueDate: nextTaskDueDate || undefined,
         secondaries: Array.from(secondarySelected).map((product) => ({ product })),
       }),
     });
@@ -180,7 +206,22 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
                 <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Account</p>
                 <p className="mt-1 flex items-center gap-1.5 text-gray-700">
                   <Building2 size={14} className="text-gray-400" aria-hidden />
-                  {companyName} <span className="text-xs text-gray-400">(found or created — shared across products)</span>
+                  {lead.account?.name ?? companyName}
+                  <span className="text-xs text-gray-400">
+                    {lead.account ? "(existing account will be reused)" : "(matched safely or created once)"}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Primary Contact</p>
+                <p className="mt-1 flex items-center gap-1.5 text-gray-700">
+                  <User size={14} className="text-gray-400" aria-hidden />
+                  {lead.primaryContact
+                    ? `${lead.primaryContact.firstName} ${lead.primaryContact.lastName}`
+                    : lead.name}
+                  <span className="text-xs text-gray-400">
+                    {lead.primaryContact ? "(existing contact will be reused)" : "(matched safely or created once)"}
+                  </span>
                 </p>
               </div>
               <div>
@@ -208,6 +249,49 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
                 />
               </div>
             </div>
+          </div>
+
+          <div className="card p-6">
+            <h2 className="text-sm font-semibold text-gray-800">Canonical Next Task</h2>
+            <p className="text-xs text-gray-500 mt-1 mb-4">
+              Conversion cannot leave a qualified lead without an open next action.
+            </p>
+            {existingTask ? (
+              <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden />
+                <div>
+                  <p className="text-sm font-medium text-emerald-900">{existingTask.title}</p>
+                  <p className="mt-1 text-xs text-emerald-700">
+                    {existingTask.dueDate ? `Due ${new Date(existingTask.dueDate).toLocaleDateString()}. ` : "No due date. "}
+                    This existing task will be linked to the new Opportunity and preserved on the Lead.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className="label" htmlFor="cv-next-task">Next Task</label>
+                  <input
+                    id="cv-next-task"
+                    value={nextTaskTitle}
+                    onChange={(event) => setNextTaskTitle(event.target.value)}
+                    className="input"
+                    placeholder="What happens next?"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="cv-next-date">Due Date</label>
+                  <input
+                    id="cv-next-date"
+                    type="date"
+                    value={nextTaskDueDate}
+                    onChange={(event) => setNextTaskDueDate(event.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Optional secondary opportunities */}
@@ -248,7 +332,11 @@ export default function ConvertLeadPage({ params }: { params: { id: string } }) 
           )}
 
           <div className="flex gap-3">
-            <button onClick={handleConvert} disabled={converting} className="btn-primary disabled:opacity-60">
+            <button
+              onClick={handleConvert}
+              disabled={converting || !initialStage || (!existingTask && !nextTaskTitle.trim())}
+              className="btn-primary disabled:opacity-60"
+            >
               {converting
                 ? "Converting…"
                 : `Convert${secondarySelected.size > 0 ? ` (creates ${1 + secondarySelected.size} opportunities)` : ""}`}

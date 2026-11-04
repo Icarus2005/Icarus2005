@@ -4,10 +4,11 @@ import { runTriage } from "@/lib/proposals/triage";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const transcript = await prisma.meetingTranscript.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       account: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
@@ -21,10 +22,11 @@ export async function GET(
 /** Re-runs triage on demand (e.g. after linking an account). */
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const updated = await runTriage(params.id);
+    const updated = await runTriage(id);
     return NextResponse.json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Triage failed";
@@ -34,10 +36,11 @@ export async function POST(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    await prisma.meetingTranscript.delete({ where: { id: params.id } });
+    await prisma.meetingTranscript.delete({ where: { id: id } });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

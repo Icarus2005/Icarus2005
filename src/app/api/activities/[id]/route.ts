@@ -8,15 +8,16 @@ import { isValidActivityType } from "@/lib/activityValidation";
 // path that writes to either.
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await req.json();
   if (body.type !== undefined && !isValidActivityType(body.type)) {
     return NextResponse.json({ error: `Invalid activity type: ${body.type}` }, { status: 400 });
   }
   if (body.date) body.date = new Date(body.date);
   const activity = await prisma.activity.update({
-    where: { id: params.id },
+    where: { id: id },
     data: body,
   });
   return NextResponse.json(activity);
@@ -24,8 +25,9 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.activity.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.activity.delete({ where: { id: id } });
   return new NextResponse(null, { status: 204 });
 }
