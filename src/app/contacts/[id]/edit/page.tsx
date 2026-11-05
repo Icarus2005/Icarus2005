@@ -3,13 +3,19 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { CONTACT_ROLES } from "@/lib/constants";
+import {
+  ACQUISITION_PATHS,
+  CONTACT_ROLES,
+  LEAD_SOURCE_TYPES,
+  RELATIONSHIP_STRENGTHS,
+} from "@/lib/constants";
 
 export default function EditContactPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [contact, setContact] = useState<Record<string, string> | null>(null);
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [referrers, setReferrers] = useState<{ id: string; firstName: string; lastName: string; accountId: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -17,9 +23,11 @@ export default function EditContactPage() {
     Promise.all([
       fetch(`/api/contacts/${id}`).then((r) => r.json()),
       fetch("/api/accounts").then((r) => r.json()),
-    ]).then(([c, a]) => {
+      fetch("/api/contacts").then((r) => r.json()),
+    ]).then(([c, a, allContacts]) => {
       setContact(c);
       setAccounts(a);
+      setReferrers(allContacts.filter((item: { id: string }) => item.id !== id));
     });
   }, [id]);
 
@@ -28,7 +36,14 @@ export default function EditContactPage() {
     setSaving(true);
     setError("");
     const data = Object.fromEntries(new FormData(e.currentTarget));
-    const body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ""));
+    const nullableFields = new Set([
+      "title", "role", "email", "phone", "linkedin", "relationshipStrength",
+      "sourceType", "sourceDetail", "acquisitionPath", "referredById",
+    ]);
+    const body = Object.fromEntries(Object.entries(data).map(([key, value]) => [
+      key,
+      nullableFields.has(key) && value === "" ? null : value,
+    ]));
     const res = await fetch(`/api/contacts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -65,6 +80,46 @@ export default function EditContactPage() {
           <div>
             <label className="label">Last Name *</label>
             <input name="lastName" required defaultValue={contact.lastName} className="input" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+          <h2 className="text-sm font-semibold text-gray-800">Relationship memory</h2>
+          <p className="mt-1 text-xs text-gray-500">These are deliberate user-recorded facts. Buying role and relationship strength remain separate.</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="label">Relationship Strength</label>
+              <select name="relationshipStrength" defaultValue={contact.relationshipStrength ?? ""} className="input">
+                <option value="">Unknown</option>
+                {Object.entries(RELATIONSHIP_STRENGTHS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Source Type</label>
+              <select name="sourceType" defaultValue={contact.sourceType ?? ""} className="input">
+                <option value="">Unknown</option>
+                {Object.entries(LEAD_SOURCE_TYPES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Source Detail</label>
+              <input name="sourceDetail" defaultValue={contact.sourceDetail ?? ""} className="input" placeholder="Event, introducer or context" />
+            </div>
+            <div>
+              <label className="label">Acquisition Path</label>
+              <select name="acquisitionPath" defaultValue={contact.acquisitionPath ?? ""} className="input">
+                <option value="">Unknown</option>
+                {Object.entries(ACQUISITION_PATHS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Referred By</label>
+              <select name="referredById" defaultValue={contact.referredById ?? ""} className="input">
+                <option value="">Not recorded</option>
+                {referrers.map((item) => <option key={item.id} value={item.id}>{item.firstName} {item.lastName}{item.accountId === contact.accountId ? " · same Account" : ""}</option>)}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-400">Select only when a referral or introduction is known; leave blank rather than inferring.</p>
+            </div>
           </div>
         </div>
         <div>
