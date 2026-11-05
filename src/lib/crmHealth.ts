@@ -126,6 +126,24 @@ export function isOpenOpportunityRecord(opportunity: {
     !(opportunity.stageRef?.isWon || opportunity.stageRef?.isLost || /^CLOSED_/i.test(opportunity.stage));
 }
 
+/**
+ * One shared definition for Account-level open-deal counts and pipeline value.
+ * Stage metadata is authoritative where available; the CLOSED_* check keeps
+ * legacy records safe when their pipeline-stage relation is missing.
+ */
+export function summarizeOpenOpportunityPipeline(opportunities: Array<{
+  stage: string;
+  stageRef?: { isWon: boolean; isLost: boolean } | null;
+  closedAt?: Date | string | null;
+  value?: number | null;
+}>): { openDealCount: number; pipelineValue: number } {
+  const openOpportunities = opportunities.filter(isOpenOpportunityRecord);
+  return {
+    openDealCount: openOpportunities.length,
+    pipelineValue: openOpportunities.reduce((sum, opportunity) => sum + (opportunity.value ?? 0), 0),
+  };
+}
+
 function record(
   entity: HealthEntity,
   id: string,

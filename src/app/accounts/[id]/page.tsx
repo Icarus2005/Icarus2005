@@ -16,6 +16,7 @@ import {
 } from "@/lib/constants";
 import { fmtDateYear, fmtMoney } from "@/lib/format";
 import { deriveLastInteraction } from "@/lib/nextInteraction";
+import { summarizeOpenOpportunityPipeline } from "@/lib/crmHealth";
 import {
   buildProductEvidence,
   buildRelationshipTimeline,
@@ -204,8 +205,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     })),
   ];
   const latest = deriveLastInteraction(activities);
-  const openDeals = account.opportunities.filter((opportunity) => !opportunity.closedAt);
-  const pipelineValue = openDeals.reduce((sum, opportunity) => sum + (opportunity.value ?? 0), 0);
+  const { openDealCount, pipelineValue } = summarizeOpenOpportunityPipeline(account.opportunities);
   const historyGaps = [
     activities.length === 0 ? "No Activities document this relationship; engagement history may exist outside the CRM." : null,
     account.contacts.length === 0 ? "No Contacts are linked to this Account." : null,
@@ -239,7 +239,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
       <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5" aria-label="Relationship summary">
         {[
-          ["Contacts", account.contacts.length], ["Leads", account.leads.length], ["Open deals", openDeals.length],
+          ["Contacts", account.contacts.length], ["Leads", account.leads.length], ["Open deals", openDealCount],
           ["Activities", activities.length], ["Pipeline", fmtMoney(pipelineValue)],
         ].map(([label, value]) => (
           <div key={label} className="card p-4"><p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</p><p className="mt-1 text-xl font-bold text-gray-900">{value}</p></div>
