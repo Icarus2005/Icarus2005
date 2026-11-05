@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { GCC_COUNTRIES, SECTORS, COMPANY_SIZES } from "@/lib/constants";
+import { ACCOUNT_TIERS, GCC_COUNTRIES, SECTORS, COMPANY_SIZES } from "@/lib/constants";
 
 export default function EditAccountPage() {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +73,13 @@ export default function EditAccountPage() {
               ))}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="label">Commercial Tier</label>
+          <select name="tier" defaultValue={account.tier ?? ""} className="input">
+            <option value="">Not recorded</option>
+            {Object.entries(ACCOUNT_TIERS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
