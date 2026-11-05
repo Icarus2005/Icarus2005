@@ -69,7 +69,8 @@ export type DailyActionDashboardInput = {
 
 export type TodayAction = {
   key: string;
-  timing: "overdue" | "today" | "missing";
+  timing: TodayCondition;
+  conditions: TodayCondition[];
   label: string;
   context: string | null;
   date: DateValue | null;
@@ -81,6 +82,13 @@ export type TodayAction = {
   explanation: string;
 };
 
+export type TodayCondition = "commitmentOverdue" | "overdue" | "today" | "missing" | "unscheduled";
+
+export type AttentionReason = {
+  kind: "commercial" | "hygiene";
+  text: string;
+};
+
 export type AtRiskItem = {
   key: string;
   entity: "lead" | "opportunity";
@@ -88,7 +96,8 @@ export type AtRiskItem = {
   context: string | null;
   product: string;
   href: string;
-  reasons: string[];
+  category: AttentionReason["kind"];
+  reasons: AttentionReason[];
   actionHref: string;
   actionLabel: string;
   nextInteraction: NextInteraction;
@@ -102,6 +111,7 @@ export type UpcomingItem = {
   context: string | null;
   product: string;
   date: DateValue;
+  relatedDates?: Array<{ type: "task" | "commitment"; date: DateValue }>;
   href: string;
   explanation: string;
 };
@@ -116,6 +126,19 @@ export type PipelineMetrics = {
 };
 
 const priorityRank: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+
+export type DashboardView = "today" | "attention";
+
+export function dashboardViewHref(product: string | null, view: DashboardView): string {
+  const params = new URLSearchParams();
+  if (product) params.set("product", product);
+  params.set("view", view);
+  return `/?${params.toString()}#${view === "today" ? "today-heading" : "attention-heading"}`;
+}
+
+export function visibleDashboardItems<T>(items: T[], limit: number, expanded: boolean): T[] {
+  return expanded ? items : items.slice(0, limit);
+}
 
 function taskProduct(task: DailyActionDashboardInput["tasks"][number]): string {
   return task.opportunity?.product ?? task.lead?.primaryProduct ?? task.product ?? "UNASSIGNED";
@@ -153,24 +176,55 @@ export function buildDailyActionDashboard(
   const upcomingEnd = addDubaiDays(todayStart, thresholds.upcomingCommitmentDays + 1);
   const openTasks = input.tasks.filter((task) => task.status === "OPEN");
 
-  const taskActions: TodayAction[] = openTasks
-    .filter((task) => task.dueDate && (isOverdueDubai(task.dueDate, now) || isOnDubaiDay(task.dueDate, todayStart, tomorrowStart)))
-    .map((task) => {
+  const taskActions: TodayAction[] = openTasks.flatMap((task) => {
+      const conditions: TodayCondition[] = [];
+      const explanations: string[] = [];
+      const commitmentOverdue = task.clientCommitmentDate && isOverdueDubai(task.clientCommitmentDate, now);
+      const dueOverdue = task.dueDate && isOverdueDubai(task.dueDate, now);
+      const dueToday = task.dueDate && isOnDubaiDay(task.dueDate, todayStart, tomorrowStart);
+
+      if (commitmentOverdue) {
+        conditions.push("commitmentOverdue");
+        explanations.push("The recorded client commitment date has passed.");
+      }
+      if (dueOverdue) {
+        conditions.push("overdue");
+        explanations.push("The internal Dubai due date has passed.");
+      } else if (dueToday) {
+        conditions.push("today");
+        explanations.push("Internal target due today in Dubai.");
+      }
+      if (!task.dueDate) {
+        conditions.push("unscheduled");
+        explanations.push("This open Task has no internal due date and needs scheduling.");
+      }
+      if (conditions.length === 0) return [];
+
       const context = taskContext(task);
-      const overdue = isOverdueDubai(task.dueDate, now);
-      return {
+      const product = taskProduct(task);
+      const timing: TodayCondition = commitmentOverdue
+        ? "commitmentOverdue"
+        : dueOverdue
+          ? "overdue"
+          : dueToday
+            ? "today"
+            : "unscheduled";
+      const scheduleParams = new URLSearchParams({ bucket: "Needs Scheduling" });
+      if (product !== "UNASSIGNED") scheduleParams.set("product", product);
+      return [{
         key: `task:${task.id}`,
-        timing: overdue ? "overdue" as const : "today" as const,
+        timing,
+        conditions,
         label: task.title,
         context: context.label,
-        date: task.dueDate,
+        date: timing === "commitmentOverdue" ? task.clientCommitmentDate : task.dueDate,
         priority: task.priority,
-        product: taskProduct(task),
+        product,
         href: context.href,
-        actionHref: "/tasks",
-        actionLabel: "Review task",
-        explanation: overdue ? "The Dubai due date has passed." : "Due today in Dubai.",
-      };
+        actionHref: conditions.includes("unscheduled") ? `/tasks?${scheduleParams.toString()}` : "/tasks",
+        actionLabel: conditions.includes("unscheduled") ? "Schedule task" : "Review task",
+        explanation: explanations.join(" "),
+      }];
     });
 
   const qualifiedWithoutTasks: TodayAction[] = input.leads
@@ -178,6 +232,7 @@ export function buildDailyActionDashboard(
     .map((lead) => ({
       key: `lead-next-task:${lead.id}`,
       timing: "missing" as const,
+      conditions: ["missing" as const],
       label: lead.name,
       context: lead.company,
       date: null,
@@ -189,7 +244,13 @@ export function buildDailyActionDashboard(
       explanation: "Qualified Lead with no canonical open next Task.",
     }));
 
-  const timingRank = { overdue: 0, today: 1, missing: 2 } as const;
+  const timingRank: Record<TodayCondition, number> = {
+    commitmentOverdue: 0,
+    overdue: 1,
+    today: 2,
+    missing: 3,
+    unscheduled: 4,
+  };
   const today = [...taskActions, ...qualifiedWithoutTasks].sort((a, b) =>
     timingRank[a.timing] - timingRank[b.timing] ||
     (priorityRank[a.priority] ?? 4) - (priorityRank[b.priority] ?? 4) ||
@@ -200,27 +261,32 @@ export function buildDailyActionDashboard(
   const atRiskOpportunities: AtRiskItem[] = input.opportunities
     .filter(isOpenOpportunityRecord)
     .flatMap((opportunity) => {
-      const reasons: string[] = [];
+      const reasons: AttentionReason[] = [];
       let rank = 0;
+      const closeDatePassed = opportunity.expectedCloseDate && isOverdueDubai(opportunity.expectedCloseDate, now);
+      if (closeDatePassed) {
+        reasons.push({ kind: "commercial", text: "Expected close date has passed while the Opportunity remains open." });
+        rank += 5;
+      }
       const latest = latestActivityDate(opportunity.activities);
       const inactive = !latest || isOlderThanDays(latest, thresholds.recentOpportunityActivityDays, now);
       if (inactive) {
-        reasons.push(latest
+        reasons.push({ kind: "commercial", text: latest
           ? `No Activity in ${thresholds.recentOpportunityActivityDays}+ days; last recorded ${latest.toISOString().slice(0, 10)}.`
-          : "No Activity has been recorded.");
+          : "No Activity has been recorded." });
         rank += 3;
       }
       const tasks = opportunity.tasks.filter((task) => task.status === "OPEN");
       const nextInteraction = deriveNextInteraction(tasks, opportunity.nextAction, opportunity.nextActionDate);
       const missingCanonicalTask = tasks.length === 0;
       if (missingCanonicalTask) {
-        reasons.push(nextInteraction?.source === "field"
+        reasons.push({ kind: "hygiene", text: nextInteraction?.source === "field"
           ? "No open Task; only the legacy next-action note remains."
-          : "No next action is recorded.");
+          : "No next action is recorded." });
         rank += 4;
       }
       if (opportunity.healthStatus === "AT_RISK" || opportunity.healthStatus === "STALLED") {
-        reasons.push(`Explicitly marked ${opportunity.healthStatus === "STALLED" ? "Stalled" : "At Risk"}.`);
+        reasons.push({ kind: "commercial", text: `Explicitly marked ${opportunity.healthStatus === "STALLED" ? "Stalled" : "At Risk"}.` });
         rank += 2;
       }
       if (reasons.length === 0) return [];
@@ -231,6 +297,7 @@ export function buildDailyActionDashboard(
         context: opportunity.account.name,
         product: opportunity.product,
         href: `/opportunities/${opportunity.id}`,
+        category: reasons.some((reason) => reason.kind === "commercial") ? "commercial" as const : "hygiene" as const,
         reasons,
         actionHref: missingCanonicalTask
           ? `/tasks/new?opportunityId=${opportunity.id}&product=${opportunity.product}`
@@ -246,28 +313,28 @@ export function buildDailyActionDashboard(
   const atRiskLeads: AtRiskItem[] = input.leads
     .filter((lead) => lead.status !== "DISQUALIFIED" && !lead.convertedOpportunityId)
     .flatMap((lead) => {
-      const reasons: string[] = [];
+      const reasons: AttentionReason[] = [];
       let rank = 0;
       const qualifiedWithoutOpportunity = lead.status === "QUALIFIED";
       if (qualifiedWithoutOpportunity) {
-        reasons.push("Qualified Lead has no Opportunity.");
+        reasons.push({ kind: "hygiene", text: "Qualified Lead has no Opportunity." });
         rank += 5;
       }
       const latest = latestActivityDate(lead.activities);
       const cooling = isOlderThanDays(latest ?? lead.createdAt, thresholds.staleLeadDays, now);
       if (cooling) {
-        reasons.push(latest
+        reasons.push({ kind: "commercial", text: latest
           ? `No Activity in ${thresholds.staleLeadDays}+ days; last recorded ${latest.toISOString().slice(0, 10)}.`
-          : `No Activity in ${thresholds.staleLeadDays}+ days since creation.`);
+          : `No Activity in ${thresholds.staleLeadDays}+ days since creation.` });
         rank += 3;
       }
       const tasks = lead.tasks.filter((task) => task.status === "OPEN");
       const nextInteraction = deriveNextInteraction(tasks, lead.nextAction, lead.nextActionDate);
       const missingCanonicalTask = lead.status === "QUALIFIED" && tasks.length === 0;
       if (missingCanonicalTask) {
-        reasons.push(nextInteraction?.source === "field"
+        reasons.push({ kind: "hygiene", text: nextInteraction?.source === "field"
           ? "No open Task; only the legacy next-action note remains."
-          : "No next action is recorded.");
+          : "No next action is recorded." });
         rank += 4;
       }
       if (reasons.length === 0) return [];
@@ -278,6 +345,7 @@ export function buildDailyActionDashboard(
         context: lead.company,
         product: lead.primaryProduct,
         href: `/leads/${lead.id}`,
+        category: reasons.some((reason) => reason.kind === "commercial") ? "commercial" as const : "hygiene" as const,
         reasons,
         actionHref: qualifiedWithoutOpportunity
           ? `/leads/${lead.id}/convert`
@@ -293,37 +361,41 @@ export function buildDailyActionDashboard(
   const atRisk = [...atRiskLeads, ...atRiskOpportunities].sort((a, b) =>
     b.rank - a.rank || a.label.localeCompare(b.label)
   );
+  const attentionSummary = {
+    records: atRisk.length,
+    commercialFlags: atRisk.reduce((count, item) => count + item.reasons.filter((reason) => reason.kind === "commercial").length, 0),
+    hygieneFlags: atRisk.reduce((count, item) => count + item.reasons.filter((reason) => reason.kind === "hygiene").length, 0),
+  };
 
-  const upcomingTasks: UpcomingItem[] = openTasks
-    .filter((task) => task.dueDate && within(task.dueDate, tomorrowStart, upcomingEnd))
-    .map((task) => {
+  const upcomingTaskSchedules: UpcomingItem[] = openTasks.flatMap((task) => {
+      const relatedDates: NonNullable<UpcomingItem["relatedDates"]> = [];
+      if (task.dueDate && within(task.dueDate, tomorrowStart, upcomingEnd)) {
+        relatedDates.push({ type: "task", date: task.dueDate });
+      }
+      if (task.clientCommitmentDate && within(task.clientCommitmentDate, todayStart, upcomingEnd)) {
+        relatedDates.push({ type: "commitment", date: task.clientCommitmentDate });
+      }
+      if (relatedDates.length === 0) return [];
+      relatedDates.sort((a, b) =>
+        dateTime(a.date) - dateTime(b.date) || (a.type === "commitment" ? -1 : 1)
+      );
       const context = taskContext(task);
-      return {
-        key: `task-due:${task.id}`,
-        type: "task" as const,
+      const primary = relatedDates[0];
+      return [{
+        key: `task-schedule:${task.id}`,
+        type: primary.type,
         label: task.title,
         context: context.label,
         product: taskProduct(task),
-        date: task.dueDate!,
+        date: primary.date,
+        relatedDates,
         href: context.href,
-        explanation: "Internal follow-up target.",
-      };
-    });
-
-  const upcomingCommitments: UpcomingItem[] = openTasks
-    .filter((task) => task.clientCommitmentDate && within(task.clientCommitmentDate, todayStart, upcomingEnd))
-    .map((task) => {
-      const context = taskContext(task);
-      return {
-        key: `client-commitment:${task.id}`,
-        type: "commitment" as const,
-        label: task.title,
-        context: context.label,
-        product: taskProduct(task),
-        date: task.clientCommitmentDate!,
-        href: context.href,
-        explanation: "Recorded client commitment date.",
-      };
+        explanation: relatedDates.length > 1
+          ? "Internal target and recorded client commitment; both dates are shown."
+          : primary.type === "commitment"
+            ? "Recorded client commitment date."
+            : "Internal follow-up target.",
+      }];
     });
 
   const upcomingMeetings: UpcomingItem[] = input.meetings
@@ -362,7 +434,7 @@ export function buildDailyActionDashboard(
     }));
 
   const typeRank = { commitment: 0, meeting: 1, task: 2, close: 3 } as const;
-  const upcoming = [...upcomingTasks, ...upcomingCommitments, ...upcomingMeetings, ...upcomingCloses].sort((a, b) =>
+  const upcoming = [...upcomingTaskSchedules, ...upcomingMeetings, ...upcomingCloses].sort((a, b) =>
     dateTime(a.date) - dateTime(b.date) || typeRank[a.type] - typeRank[b.type] || a.label.localeCompare(b.label)
   );
 
@@ -395,6 +467,7 @@ export function buildDailyActionDashboard(
     thresholds: { ...thresholds },
     today,
     atRisk,
+    attentionSummary,
     upcoming,
     metrics,
   };

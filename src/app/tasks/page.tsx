@@ -42,11 +42,11 @@ function bucketize(tasks: Task[]): Bucket[] {
   const weekEnd = addDubaiDays(today, 7);
 
   const buckets: Record<string, Task[]> = {
-    Overdue: [], Today: [], Tomorrow: [], "This Week": [], Later: [], "No due date": [], Completed: [],
+    Overdue: [], Today: [], Tomorrow: [], "This Week": [], Later: [], "Needs Scheduling": [], Completed: [],
   };
   for (const t of tasks) {
     if (t.status === "DONE") { buckets.Completed.push(t); continue; }
-    if (!t.dueDate) { buckets["No due date"].push(t); continue; }
+    if (!t.dueDate) { buckets["Needs Scheduling"].push(t); continue; }
     const due = new Date(t.dueDate);
     // Overdue = the task's Dubai calendar day has fully passed — not "due
     // before the exact current instant" — so a task due today never shows
@@ -65,6 +65,7 @@ function bucketize(tasks: Task[]): Bucket[] {
 function TasksPageInner() {
   const searchParams = useSearchParams();
   const product = searchParams.get("product") ?? "";
+  const requestedBucket = searchParams.get("bucket") ?? "All";
   const [tasks, setTasks] = useState<Task[]>([]);
   const [owners, setOwners] = useState<Member[]>([]);
   const [ownerId, setOwnerId] = useState("");
@@ -92,6 +93,10 @@ function TasksPageInner() {
     setLoading(true);
     load();
   }, [load]);
+
+  useEffect(() => {
+    setActiveBucket(requestedBucket);
+  }, [requestedBucket]);
 
   useEffect(() => {
     fetch("/api/team")

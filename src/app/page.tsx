@@ -4,15 +4,24 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleAlert, Clock3 } from "lucide-react";
 import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
-import { getDailyActionDashboard, type AtRiskItem, type TodayAction, type UpcomingItem } from "@/lib/dailyActionDashboard";
+import {
+  dashboardViewHref,
+  getDailyActionDashboard,
+  visibleDashboardItems,
+  type AtRiskItem,
+  type TodayAction,
+  type UpcomingItem,
+} from "@/lib/dailyActionDashboard";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { parseProductParam, PRODUCTS_META } from "@/lib/products";
 import { stageColor } from "@/lib/constants";
 
 const todayStyles: Record<TodayAction["timing"], { label: string; badge: string; border: string }> = {
+  commitmentOverdue: { label: "Overdue commitment", badge: "bg-red-100 text-red-700", border: "border-l-red-600" },
   overdue: { label: "Overdue", badge: "bg-red-100 text-red-700", border: "border-l-red-500" },
   today: { label: "Due today", badge: "bg-amber-100 text-amber-700", border: "border-l-amber-500" },
   missing: { label: "Missing next Task", badge: "bg-violet-100 text-violet-700", border: "border-l-violet-500" },
+  unscheduled: { label: "Needs Scheduling", badge: "bg-sky-100 text-sky-700", border: "border-l-sky-500" },
 };
 
 const upcomingStyles: Record<UpcomingItem["type"], { label: string; badge: string }> = {
@@ -31,9 +40,9 @@ function EmptyState({ icon: Icon, children }: { icon: typeof CheckCircle2; child
   );
 }
 
-function TodayList({ items }: { items: TodayAction[] }) {
-  if (items.length === 0) return <EmptyState icon={CheckCircle2}>No overdue, due-today or missing qualified-Lead actions.</EmptyState>;
-  const visibleItems = items.slice(0, 12);
+function TodayList({ items, showAll }: { items: TodayAction[]; showAll: boolean }) {
+  if (items.length === 0) return <EmptyState icon={CheckCircle2}>No overdue commitments, due-today Tasks, unscheduled Tasks or missing qualified-Lead actions.</EmptyState>;
+  const visibleItems = visibleDashboardItems(items, 12, showAll);
   return (
     <div className="space-y-2.5">
       {visibleItems.map((item) => {
@@ -43,7 +52,14 @@ function TodayList({ items }: { items: TodayAction[] }) {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.badge}`}>{style.label}</span>
+                  {item.conditions.map((condition) => {
+                    const conditionStyle = todayStyles[condition];
+                    return (
+                      <span key={condition} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${conditionStyle.badge}`}>
+                        {conditionStyle.label}
+                      </span>
+                    );
+                  })}
                   <ProductBadge product={item.product} />
                 </div>
                 <Link href={item.href} className="mt-2 block truncate text-sm font-semibold text-gray-900 hover:text-brand-700">
@@ -63,51 +79,69 @@ function TodayList({ items }: { items: TodayAction[] }) {
           </article>
         );
       })}
-      {items.length > visibleItems.length && (
+      {!showAll && items.length > visibleItems.length && (
         <p className="px-2 pt-1 text-center text-[11px] text-gray-400">
-          Showing the 12 highest-priority actions of {items.length}. Open All Tasks for the full list.
+          Showing the 12 highest-priority actions of {items.length}. Use View all for the complete action list.
         </p>
       )}
     </div>
   );
 }
 
-function AtRiskList({ items }: { items: AtRiskItem[] }) {
-  if (items.length === 0) return <EmptyState icon={CheckCircle2}>No open deals or active Leads currently match an At Risk rule.</EmptyState>;
-  const opportunities = items.filter((item) => item.entity === "opportunity");
-  const leads = items.filter((item) => item.entity === "lead");
+function AtRiskList({ items, showAll }: { items: AtRiskItem[]; showAll: boolean }) {
+  if (items.length === 0) return <EmptyState icon={CheckCircle2}>No open deals or active Leads currently need attention.</EmptyState>;
+  const commercial = items.filter((item) => item.category === "commercial");
+  const hygiene = items.filter((item) => item.category === "hygiene");
   const groups = [
-    { label: "Opportunities needing attention", items: opportunities.slice(0, 6), total: opportunities.length },
-    { label: "Highest-priority Leads", items: leads.slice(0, 8), total: leads.length },
+    {
+      label: "Commercial risks",
+      description: "Cooling relationships, inactive deals, passed close dates or explicit risk status.",
+      items: visibleDashboardItems(commercial, 8, showAll),
+      total: commercial.length,
+    },
+    {
+      label: "CRM hygiene & missing data",
+      description: "Incomplete canonical links or next-action records without a commercial risk signal.",
+      items: visibleDashboardItems(hygiene, 8, showAll),
+      total: hygiene.length,
+    },
   ].filter((group) => group.total > 0);
   return (
     <div className="space-y-4">
       {groups.map((group) => (
         <div key={group.label} className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{group.label}</h3>
+            <div>
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{group.label}</h3>
+              <p className="mt-0.5 text-[10px] text-gray-400">{group.description}</p>
+            </div>
             <span className="text-[11px] text-gray-400">{group.total}</span>
           </div>
           {group.items.map((item) => (
-            <article key={item.key} className="rounded-xl border border-amber-100 bg-amber-50/30 p-3.5">
+            <article key={item.key} className={`rounded-xl border p-3.5 ${item.category === "commercial" ? "border-amber-100 bg-amber-50/30" : "border-slate-200 bg-slate-50/60"}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                  {item.entity === "opportunity" ? "Opportunity" : "Lead"}
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${item.category === "commercial" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700"}`}>
+                  {item.category === "commercial" ? "Commercial risk" : "CRM hygiene"}
                 </span>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">{item.entity}</span>
                 <ProductBadge product={item.product} />
               </div>
               <Link href={item.href} className="mt-2 block truncate text-sm font-semibold text-gray-900 hover:text-brand-700">{item.label}</Link>
               {item.context && <p className="mt-0.5 truncate text-xs text-gray-500">{item.context}</p>}
             </div>
-            <AlertTriangle size={17} className="shrink-0 text-amber-600" aria-hidden />
+            {item.category === "commercial"
+              ? <AlertTriangle size={17} className="shrink-0 text-amber-600" aria-hidden />
+              : <CircleAlert size={17} className="shrink-0 text-slate-500" aria-hidden />}
           </div>
           <ul className="mt-2.5 space-y-1">
             {item.reasons.map((reason) => (
-              <li key={reason} className="flex gap-2 text-[11px] leading-4 text-amber-900">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-500" aria-hidden />
-                {reason}
+              <li key={`${reason.kind}:${reason.text}`} className="flex items-start gap-2 text-[11px] leading-4 text-gray-700">
+                <span className={`mt-0.5 shrink-0 rounded px-1 py-px text-[9px] font-semibold uppercase ${reason.kind === "commercial" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600"}`}>
+                  {reason.kind === "commercial" ? "Risk" : "Hygiene"}
+                </span>
+                {reason.text}
               </li>
             ))}
           </ul>
@@ -125,7 +159,7 @@ function AtRiskList({ items }: { items: AtRiskItem[] }) {
           </div>
             </article>
           ))}
-          {group.total > group.items.length && (
+          {!showAll && group.total > group.items.length && (
             <p className="px-2 text-center text-[11px] text-gray-400">
               Showing {group.items.length} of {group.total}; CRM Health retains the complete review list.
             </p>
@@ -156,6 +190,11 @@ function UpcomingList({ items }: { items: UpcomingItem[] }) {
               <p className="mt-1.5 truncate text-sm font-semibold text-gray-900">{item.label}</p>
               {item.context && <p className="truncate text-xs text-gray-500">{item.context}</p>}
               <p className="mt-1 text-[11px] text-gray-400">{item.explanation}</p>
+              {item.relatedDates && item.relatedDates.length > 1 && (
+                <p className="mt-1 text-[11px] font-medium text-gray-500">
+                  {item.relatedDates.map((entry) => `${entry.type === "commitment" ? "Client commitment" : "Internal target"}: ${fmtDate(entry.date)}`).join(" · ")}
+                </p>
+              )}
             </div>
           </Link>
         );
@@ -167,11 +206,13 @@ function UpcomingList({ items }: { items: UpcomingItem[] }) {
 export default async function DashboardPage({
   searchParams: searchParamsPromise,
 }: {
-  searchParams: Promise<{ product?: string }>;
+  searchParams: Promise<{ product?: string; view?: string }>;
 }) {
   const searchParams = await searchParamsPromise;
   const product = parseProductParam(searchParams.product);
   const dashboard = await getDailyActionDashboard(product ?? "");
+  const showAllToday = searchParams.view === "today";
+  const showAllAttention = searchParams.view === "attention";
   const label = product ? PRODUCTS_META[product].label : "All business lines";
   const productQuery = product ? `?product=${product}` : "";
   const maxStageValue = Math.max(...dashboard.metrics.stages.map((stage) => stage.value), 1);
@@ -200,26 +241,38 @@ export default async function DashboardPage({
                 <h2 id="today-heading" className="text-sm font-bold uppercase tracking-wide text-gray-900">Today</h2>
                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">{dashboard.today.length}</span>
               </div>
-              <p className="mt-1 text-xs text-gray-500">Overdue first, then due today and missing qualified-Lead actions.</p>
+              <p className="mt-1 text-xs text-gray-500">Overdue commitments and Tasks first, then due today, missing next actions and Needs Scheduling.</p>
             </div>
-            <Link href={`/tasks${productQuery}`} className="text-xs font-medium text-brand-600 hover:underline">All Tasks</Link>
+            <Link
+              href={showAllToday ? `${product ? `/?product=${product}` : "/"}#today-heading` : dashboardViewHref(product, "today")}
+              className="text-xs font-medium text-brand-600 hover:underline"
+            >
+              {showAllToday ? "Prioritized view" : "View all"}
+            </Link>
           </div>
-          <div className="max-h-[680px] overflow-y-auto pr-1"><TodayList items={dashboard.today} /></div>
+          <div className={showAllToday ? "pr-1" : "max-h-[680px] overflow-y-auto pr-1"}><TodayList items={dashboard.today} showAll={showAllToday} /></div>
         </section>
 
-        <section className="card p-4 md:p-5" aria-labelledby="risk-heading">
+        <section className="card p-4 md:p-5" aria-labelledby="attention-heading">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <AlertTriangle size={17} className="text-amber-600" aria-hidden />
-                <h2 id="risk-heading" className="text-sm font-bold uppercase tracking-wide text-gray-900">At Risk</h2>
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{dashboard.atRisk.length}</span>
+                <h2 id="attention-heading" className="text-sm font-bold uppercase tracking-wide text-gray-900">Needs Attention</h2>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{dashboard.attentionSummary.records}</span>
               </div>
-              <p className="mt-1 text-xs text-gray-500">Every flag is explained from recorded CRM state.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {dashboard.attentionSummary.commercialFlags} commercial risk flag{dashboard.attentionSummary.commercialFlags === 1 ? "" : "s"} · {dashboard.attentionSummary.hygieneFlags} CRM hygiene flag{dashboard.attentionSummary.hygieneFlags === 1 ? "" : "s"} across {dashboard.attentionSummary.records} record{dashboard.attentionSummary.records === 1 ? "" : "s"}.
+              </p>
             </div>
-            <Link href="/admin/data-audit" className="text-xs font-medium text-brand-600 hover:underline">Health detail</Link>
+            <Link
+              href={showAllAttention ? `${product ? `/?product=${product}` : "/"}#attention-heading` : dashboardViewHref(product, "attention")}
+              className="text-xs font-medium text-brand-600 hover:underline"
+            >
+              {showAllAttention ? "Prioritized view" : "View all"}
+            </Link>
           </div>
-          <div className="max-h-[680px] overflow-y-auto pr-1"><AtRiskList items={dashboard.atRisk} /></div>
+          <div className={showAllAttention ? "pr-1" : "max-h-[680px] overflow-y-auto pr-1"}><AtRiskList items={dashboard.atRisk} showAll={showAllAttention} /></div>
         </section>
 
         <section className="card p-4 md:p-5" aria-labelledby="upcoming-heading">
