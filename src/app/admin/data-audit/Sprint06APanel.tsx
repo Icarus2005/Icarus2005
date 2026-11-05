@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Search } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Search } from "lucide-react";
 
 // Read-only preview panel — no execute action exists yet. Sprint 06A stops
 // after the live production preview until the CRM owner explicitly approves

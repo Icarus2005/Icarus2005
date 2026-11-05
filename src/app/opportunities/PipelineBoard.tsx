@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarClock, CircleDot, GripVertical } from "lucide-react";
+import { TriangleAlert as AlertTriangle, CalendarClock, CircleDot, GripVertical } from "lucide-react";
 import ProductBadge from "@/components/ProductBadge";
 import { marketLabels, stageColor } from "@/lib/constants";
 import { HEALTH_COLORS, HEALTH_STATUSES } from "@/lib/products";

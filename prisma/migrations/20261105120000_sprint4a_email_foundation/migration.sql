@@ -81,6 +81,9 @@ CREATE INDEX "MailboxConnection_enabled_idx" ON "MailboxConnection"("enabled");
 CREATE UNIQUE INDEX "EmailThread_mailboxConnectionId_providerThreadId_key" ON "EmailThread"("mailboxConnectionId", "providerThreadId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "EmailThread_id_mailboxConnectionId_key" ON "EmailThread"("id", "mailboxConnectionId");
+
+-- CreateIndex
 CREATE INDEX "EmailThread_latestMessageAt_idx" ON "EmailThread"("latestMessageAt");
 
 -- CreateIndex
@@ -108,13 +111,13 @@ CREATE UNIQUE INDEX "EmailSyncCursor_mailboxConnectionId_folderKey_key" ON "Emai
 CREATE INDEX "EmailSyncCursor_lastSuccessfulAt_idx" ON "EmailSyncCursor"("lastSuccessfulAt");
 
 -- AddForeignKey
-ALTER TABLE "EmailThread" ADD CONSTRAINT "EmailThread_mailboxConnectionId_fkey" FOREIGN KEY ("mailboxConnectionId") REFERENCES "MailboxConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EmailThread" ADD CONSTRAINT "EmailThread_mailboxConnectionId_fkey" FOREIGN KEY ("mailboxConnectionId") REFERENCES "MailboxConnection"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EmailMessage" ADD CONSTRAINT "EmailMessage_mailboxConnectionId_fkey" FOREIGN KEY ("mailboxConnectionId") REFERENCES "MailboxConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EmailMessage" ADD CONSTRAINT "EmailMessage_mailboxConnectionId_fkey" FOREIGN KEY ("mailboxConnectionId") REFERENCES "MailboxConnection"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EmailMessage" ADD CONSTRAINT "EmailMessage_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "EmailThread"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EmailMessage" ADD CONSTRAINT "EmailMessage_threadId_mailboxConnectionId_fkey" FOREIGN KEY ("threadId", "mailboxConnectionId") REFERENCES "EmailThread"("id", "mailboxConnectionId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EmailSyncCursor" ADD CONSTRAINT "EmailSyncCursor_mailboxConnectionId_fkey" FOREIGN KEY ("mailboxConnectionId") REFERENCES "MailboxConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;

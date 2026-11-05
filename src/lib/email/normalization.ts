@@ -22,10 +22,27 @@ export function normalizeInternetMessageId(value: string | null | undefined): st
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const withoutBrackets = trimmed.startsWith("<") && trimmed.endsWith(">")
-    ? trimmed.slice(1, -1).trim()
+
+  // RFC 5322 section 3.6.4 defines angle brackets as msg-id syntax and says
+  // they are not semantically part of the identifier. Preserve the enclosed
+  // octets exactly: the RFC does not authorize case folding of id-left.
+  const semanticId = trimmed.startsWith("<") && trimmed.endsWith(">")
+    ? trimmed.slice(1, -1)
     : trimmed;
-  return withoutBrackets ? `<${withoutBrackets.toLowerCase()}>` : null;
+  if (
+    !semanticId ||
+    semanticId.includes("<") ||
+    semanticId.includes(">") ||
+    /[\u0000-\u0020\u007f]/.test(semanticId)
+  ) {
+    return null;
+  }
+
+  const at = semanticId.indexOf("@");
+  if (at <= 0 || at !== semanticId.lastIndexOf("@") || at === semanticId.length - 1) {
+    return null;
+  }
+  return semanticId;
 }
 
 function requiredText(value: string, field: string): string {

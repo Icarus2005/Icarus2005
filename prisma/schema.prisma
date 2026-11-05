@@ -245,7 +245,7 @@ model MailboxConnection {
 model EmailThread {
   id                  String            @id @default(cuid())
   mailboxConnectionId String
-  mailboxConnection   MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Cascade)
+  mailboxConnection   MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Restrict)
   providerThreadId    String?
   subjectKey          String?
   latestMessageAt     DateTime?
@@ -254,15 +254,16 @@ model EmailThread {
   updatedAt           DateTime          @updatedAt
 
   @@unique([mailboxConnectionId, providerThreadId])
+  @@unique([id, mailboxConnectionId])
   @@index([latestMessageAt])
 }
 
 model EmailMessage {
   id                       String            @id @default(cuid())
   mailboxConnectionId      String
-  mailboxConnection        MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Cascade)
+  mailboxConnection        MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Restrict)
   threadId                 String?
-  thread                   EmailThread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  thread                   EmailThread?      @relation(fields: [threadId, mailboxConnectionId], references: [id, mailboxConnectionId], onDelete: Restrict)
   externalMessageId        String
   providerReplyToMessageId String?
   internetMessageId        String?

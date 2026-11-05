@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { AlertTriangle, Plus } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getPipelines } from "@/lib/catalog";
 import { COUNTRIES, MARKET_SHORT, stageColor } from "@/lib/constants";

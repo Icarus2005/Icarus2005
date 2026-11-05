@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Building2, CheckCircle2, GitBranch, User } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Building2, CheckCircle2, GitBranch, User } from "lucide-react";
 import ProductBadge from "@/components/ProductBadge";
 import { productLabel, parseProductList } from "@/lib/products";
 import { marketLabels } from "@/lib/constants";

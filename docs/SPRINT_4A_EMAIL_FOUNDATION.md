@@ -11,8 +11,11 @@
 - `MailboxReader` is read-only and returns normalized provider-neutral metadata.
 - Normalization uses an explicit allow-list. Bodies, snippets, attachments, raw headers and raw provider payloads cannot cross the boundary.
 - Message identity is `(provider, providerAccountKey, externalMessageId)` in memory and `(mailboxConnectionId, externalMessageId)` in persistence.
+- Mailbox and thread foreign keys use restrictive deletion semantics so deleting configuration cannot cascade away message history.
+- Message/thread linkage uses a composite foreign key, preventing a message from referencing a thread owned by another mailbox.
 - Contact matching is trim-and-lowercase exact email equality only. Zero or multiple matches remain unlinked/review-only.
 - Reply evidence is evaluated in this order: provider thread, RFC `In-Reply-To`, RFC `References`, explicit provider reply relation. Address/subject/time similarity is never confirmation.
+- RFC Message-IDs are stored without syntactic angle brackets and with semantic case preserved, following RFC 5322 section 3.6.4.
 - The additive Prisma proposal contains `MailboxConnection`, `EmailThread`, `EmailMessage` and `EmailSyncCursor`. It does not modify or backfill existing CRM models.
 - `MailboxConnection.enabled` defaults to `false` and all application feature flags default to `false`.
 

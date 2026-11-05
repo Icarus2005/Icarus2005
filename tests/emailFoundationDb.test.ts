@@ -63,7 +63,108 @@ describe(
         });
         assert.equal(count, 1);
       } finally {
+        await prisma!.emailMessage.deleteMany({ where: { mailboxConnectionId: connection.id } });
         await prisma!.mailboxConnection.delete({ where: { id: connection.id } });
+      }
+    });
+
+    test("mailbox and thread deletion cannot cascade away message history", async () => {
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const connection = await prisma!.mailboxConnection.create({
+        data: {
+          provider: "OTHER",
+          providerAccountKey: `history-${suffix}`,
+          emailAddress: `history-${suffix}@example.test`,
+        },
+      });
+      const thread = await prisma!.emailThread.create({
+        data: {
+          mailboxConnectionId: connection.id,
+          providerThreadId: `thread-${suffix}`,
+        },
+      });
+      const message = await prisma!.emailMessage.create({
+        data: {
+          mailboxConnectionId: connection.id,
+          threadId: thread.id,
+          externalMessageId: `message-${suffix}`,
+          referencesJson: [],
+          direction: "INBOUND",
+          fromAddress: "contact@example.test",
+          toJson: [connection.emailAddress],
+          ccJson: [],
+          providerSentAt: new Date(),
+        },
+      });
+
+      try {
+        await assert.rejects(
+          prisma!.mailboxConnection.delete({ where: { id: connection.id } }),
+          /Foreign key constraint/,
+        );
+        await assert.rejects(
+          prisma!.emailThread.delete({ where: { id: thread.id } }),
+          /Foreign key constraint/,
+        );
+        assert.ok(await prisma!.emailMessage.findUnique({ where: { id: message.id } }));
+      } finally {
+        await prisma!.emailMessage.delete({ where: { id: message.id } });
+        await prisma!.emailThread.delete({ where: { id: thread.id } });
+        await prisma!.mailboxConnection.delete({ where: { id: connection.id } });
+      }
+    });
+
+    test("a message cannot link to a thread owned by another mailbox", async () => {
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const [first, second] = await Promise.all([
+        prisma!.mailboxConnection.create({
+          data: {
+            provider: "OTHER",
+            providerAccountKey: `thread-owner-${suffix}`,
+            emailAddress: `owner-${suffix}@example.test`,
+          },
+        }),
+        prisma!.mailboxConnection.create({
+          data: {
+            provider: "OTHER",
+            providerAccountKey: `message-owner-${suffix}`,
+            emailAddress: `message-${suffix}@example.test`,
+          },
+        }),
+      ]);
+      const thread = await prisma!.emailThread.create({
+        data: {
+          mailboxConnectionId: first.id,
+          providerThreadId: `thread-${suffix}`,
+        },
+      });
+
+      try {
+        await assert.rejects(
+          prisma!.emailMessage.create({
+            data: {
+              mailboxConnectionId: second.id,
+              threadId: thread.id,
+              externalMessageId: `cross-mailbox-${suffix}`,
+              referencesJson: [],
+              direction: "INBOUND",
+              fromAddress: "contact@example.test",
+              toJson: [second.emailAddress],
+              ccJson: [],
+              providerSentAt: new Date(),
+            },
+          }),
+          /Foreign key constraint/,
+        );
+        assert.equal(
+          await prisma!.emailMessage.count({
+            where: { externalMessageId: `cross-mailbox-${suffix}` },
+          }),
+          0,
+        );
+      } finally {
+        await prisma!.emailThread.delete({ where: { id: thread.id } });
+        await prisma!.mailboxConnection.deleteMany({ where: { id: { in: [first.id, second.id] } } });
       }
     });
   },

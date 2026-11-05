@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { AlertTriangle, History } from "lucide-react";
+import { TriangleAlert as AlertTriangle, HistoryIcon as History } from "lucide-react";
 import { getCrmHealth } from "@/lib/crmHealth";
 import CrmHealthOverview from "./CrmHealthOverview";
 

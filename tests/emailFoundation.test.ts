@@ -49,7 +49,7 @@ describe("Sprint 4A email normalization and privacy", () => {
 
     assert.equal(normalized.fromAddress, "person@example.com");
     assert.deepEqual(normalized.toAddresses, ["mailbox@example.com"]);
-    assert.equal(normalized.internetMessageId, "<message-1@example.com>");
+    assert.equal(normalized.internetMessageId, "MESSAGE-1@EXAMPLE.COM");
     for (const forbidden of [
       "body",
       "bodyHtml",
@@ -76,6 +76,20 @@ describe("Sprint 4A email normalization and privacy", () => {
     assert.equal(result.length, 2);
     assert.equal(result[0].subject, "Latest verified view");
     assert.equal(result[1].subject, "Different mailbox");
+  });
+
+  test("normalizes RFC Message-ID syntax without changing semantic case", () => {
+    const bracketed = normalizeMailboxMessage(
+      metadata({ internetMessageId: "  <CaseSensitive.Left@Example.COM>  " }),
+    );
+    const alreadySemantic = normalizeMailboxMessage(
+      metadata({ internetMessageId: "CaseSensitive.Left@Example.COM" }),
+    );
+    const malformed = normalizeMailboxMessage(metadata({ internetMessageId: "<missing-at>" }));
+
+    assert.equal(bracketed.internetMessageId, "CaseSensitive.Left@Example.COM");
+    assert.equal(alreadySemantic.internetMessageId, "CaseSensitive.Left@Example.COM");
+    assert.equal(malformed.internetMessageId, null);
   });
 });
 
@@ -156,7 +170,7 @@ describe("Sprint 4A reply evidence", () => {
         externalMessageId: "new-message",
         providerThreadId: null,
         providerReplyToMessageId: null,
-        inReplyTo: " HEADER@EXAMPLE.COM ",
+        inReplyTo: " <header@example.com> ",
         references: [],
       },
       stored,
@@ -176,6 +190,22 @@ describe("Sprint 4A reply evidence", () => {
       stored,
     );
     assert.equal(wrongMailbox.status, "NOT_A_REPLY");
+  });
+
+  test("does not case-fold RFC Message-IDs when evaluating reply headers", () => {
+    const result = detectReplyEvidence(
+      {
+        mailboxConnectionId: "mailbox-1",
+        externalMessageId: "new-message",
+        providerThreadId: null,
+        providerReplyToMessageId: null,
+        inReplyTo: "<HEADER@example.com>",
+        references: [],
+      },
+      stored,
+    );
+
+    assert.equal(result.status, "NOT_A_REPLY");
   });
 
   test("keeps address/subject/time similarity review-only", () => {
