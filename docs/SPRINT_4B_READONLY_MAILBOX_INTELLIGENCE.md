@@ -28,8 +28,8 @@ Defaults:
 | Interval | 30 minutes (fixed Netlify cron) | 48 scheduled checks/day |
 | Initial lookback | 30 days | bounded initial history |
 | Overlap | 60 minutes | safe replay after cursor/provider delay |
-| Page size | 5 messages/folder | keeps inbox + sent below the documented 30 Mail API requests/minute |
-| Pages/folder/run | 1 | bounded 30-second function execution |
+| Page size | 5 messages/folder (hard cap) | keeps inbox + sent below the documented 30 Mail API requests/minute |
+| Pages/folder/run | 1 (hard cap) | bounded 30-second function execution |
 | Retry | 5–360 minutes | capped exponential outage recovery |
 
 Continuation tokens preserve unfinished lookback work. Zoho folder pagination uses mutable numeric offsets, so the service records the start of a multi-run scan and calculates the next overlap from that start time, not the final page's completion time. This replays mail that arrived while older pages were being scanned. Delayed inbound mail is compared by arrival timestamp where Zoho provides it. Duplicate scans remain idempotent. Changes and deletions within historical pages can still shift offsets; an owner should review pilot match counts and reconciliation health before treating the import as complete.
