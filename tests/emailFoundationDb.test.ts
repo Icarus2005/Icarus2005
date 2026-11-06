@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+
+function isForeignKeyConstraintError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2003";
+  }
+
+  return error instanceof Error && /foreign key constraint|violates RESTRICT setting/i.test(error.message);
+}
 
 function isExplicitDisposableDatabase(): boolean {
   if (process.env.EMAIL_FOUNDATION_DISPOSABLE_DB_TESTS !== "true") return false;
@@ -98,15 +106,27 @@ describe(
       });
 
       try {
+        const assertHistoryPreserved = async () => {
+          const [preservedConnection, preservedThread, preservedMessage] = await Promise.all([
+            prisma!.mailboxConnection.findUnique({ where: { id: connection.id } }),
+            prisma!.emailThread.findUnique({ where: { id: thread.id } }),
+            prisma!.emailMessage.findUnique({ where: { id: message.id } }),
+          ]);
+          assert.equal(preservedConnection?.id, connection.id);
+          assert.equal(preservedThread?.id, thread.id);
+          assert.equal(preservedMessage?.id, message.id);
+        };
+
         await assert.rejects(
           prisma!.mailboxConnection.delete({ where: { id: connection.id } }),
-          /Foreign key constraint/,
+          isForeignKeyConstraintError,
         );
+        await assertHistoryPreserved();
         await assert.rejects(
           prisma!.emailThread.delete({ where: { id: thread.id } }),
-          /Foreign key constraint/,
+          isForeignKeyConstraintError,
         );
-        assert.ok(await prisma!.emailMessage.findUnique({ where: { id: message.id } }));
+        await assertHistoryPreserved();
       } finally {
         await prisma!.emailMessage.delete({ where: { id: message.id } });
         await prisma!.emailThread.delete({ where: { id: thread.id } });
@@ -154,7 +174,7 @@ describe(
               providerSentAt: new Date(),
             },
           }),
-          /Foreign key constraint/,
+          isForeignKeyConstraintError,
         );
         assert.equal(
           await prisma!.emailMessage.count({
