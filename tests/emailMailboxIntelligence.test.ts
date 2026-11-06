@@ -253,6 +253,14 @@ describe("Sprint 4B reconciliation configuration", () => {
     assert.equal(config.intervalMinutes, 30);
     assert.equal(config.initialLookbackDays, 30);
     assert.equal(config.pageSize, 5);
+    assert.equal(config.maxPagesPerRun, 1);
+    const oversized = getMailboxSyncConfig({
+      EMAIL_RECONCILE_PAGE_SIZE: "6",
+      EMAIL_RECONCILE_MAX_PAGES: "2",
+    });
+    assert.equal(oversized.pageSize, 5);
+    assert.equal(oversized.maxPagesPerRun, 1);
+    assert.equal(getMailboxSyncConfig({ EMAIL_RECONCILE_PAGE_SIZE: "3" }).pageSize, 3);
     assert.equal(
       nextRetryAt(new Date("2026-11-06T00:00:00.000Z"), 9, config).toISOString(),
       "2026-11-06T01:00:00.000Z",
