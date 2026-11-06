@@ -47,6 +47,17 @@ export interface MailboxReader {
   getMessageMetadata(externalMessageId: string): Promise<NormalizedMailboxMessage>;
 }
 
+export class MailboxReadError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly retryable = true,
+  ) {
+    super(message);
+    this.name = "MailboxReadError";
+  }
+}
+
 export type MailboxMessageMetadataInput = {
   provider: MailboxProvider;
   providerAccountKey: string;
