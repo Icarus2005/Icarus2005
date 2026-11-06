@@ -35,8 +35,10 @@ async function refreshReadAccessToken(environment: Environment, fetchImpl: typeo
   });
   let response: Response;
   try {
-    response = await fetchImpl(`https://${host}/oauth/v2/token?${params}`, {
+    response = await fetchImpl(`https://${host}/oauth/v2/token`, {
       method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
@@ -69,6 +71,10 @@ export function createZohoReadAdapter(
   const mailboxAddress = value(environment, "ZOHO_READ_MAILBOX_ADDRESS");
   if (accountId !== connection.providerAccountKey || mailboxAddress.toLowerCase() !== connection.emailAddress.toLowerCase()) {
     throw new MailboxReadError("ZOHO_CONNECTION_MISMATCH", "Read credentials do not match the mailbox connection", false);
+  }
+  const credentialRegion = (environment.ZOHO_READ_DATA_REGION?.trim() || "com").toLowerCase();
+  if (connection.dataRegion && connection.dataRegion.toLowerCase() !== credentialRegion) {
+    throw new MailboxReadError("ZOHO_CONNECTION_REGION_MISMATCH", "Read credentials do not match the mailbox data region", false);
   }
   let cachedToken: { token: string; expiresAt: number } | null = null;
   const accessToken = async () => {

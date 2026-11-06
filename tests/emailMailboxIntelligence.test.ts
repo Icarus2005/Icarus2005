@@ -10,6 +10,7 @@ import {
   nextRetryAt,
 } from "../src/lib/email/syncConfig";
 import { extractZohoAddresses, ZohoMailboxReader } from "../src/lib/email/zohoReader";
+import { createZohoReadAdapter } from "../src/lib/email/zohoReadCredentials";
 import { synchronizeMailbox } from "../src/lib/email/synchronization";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -102,6 +103,72 @@ describe("Sprint 4B Zoho read adapter", () => {
     }
   });
 
+  test("refreshes read-only OAuth credentials in a POST body and rejects tenant-region mismatches", async () => {
+    const environment = {
+      ZOHO_READ_CLIENT_ID: "read-client",
+      ZOHO_READ_CLIENT_SECRET: "private-client-secret",
+      ZOHO_READ_REFRESH_TOKEN: "private-refresh-token",
+      ZOHO_READ_ACCOUNT_ID: "zoho-account",
+      ZOHO_READ_MAILBOX_ADDRESS: "mailbox@example.com",
+      ZOHO_READ_DATA_REGION: "ae",
+      ZOHO_READ_INBOX_FOLDER_ID: "inbox-folder",
+    };
+    const connection = {
+      providerAccountKey: "zoho-account",
+      emailAddress: "mailbox@example.com",
+      dataRegion: "ae",
+    };
+    const folder = { key: "inbox" as const, direction: "INBOUND" as const };
+    let refreshCalls = 0;
+    const fetchMock: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url.includes("/oauth/v2/token")) {
+        refreshCalls += 1;
+        assert.equal(url, "https://accounts.zoho.ae/oauth/v2/token");
+        assert.equal(init?.method, "POST");
+        assert.equal((init?.headers as Record<string, string>)["Content-Type"], "application/x-www-form-urlencoded");
+        const body = new URLSearchParams(String(init?.body));
+        assert.equal(body.get("client_id"), environment.ZOHO_READ_CLIENT_ID);
+        assert.equal(body.get("client_secret"), environment.ZOHO_READ_CLIENT_SECRET);
+        assert.equal(body.get("refresh_token"), environment.ZOHO_READ_REFRESH_TOKEN);
+        return jsonResponse({ access_token: "read-access-token", expires_in: 3600 });
+      }
+      assert.ok(url.startsWith("https://mail.zoho.ae/"));
+      assert.equal(init?.method, "GET");
+      return jsonResponse({ data: [] });
+    };
+    const adapter = createZohoReadAdapter(connection, folder, getMailboxSyncConfig(), environment, fetchMock);
+    assert.deepEqual((await adapter.listMessages({})).messages, []);
+    assert.equal(refreshCalls, 1);
+    assert.throws(
+      () => createZohoReadAdapter({ ...connection, dataRegion: "eu" }, folder, getMailboxSyncConfig(), environment, fetchMock),
+      (error: unknown) => error instanceof MailboxReadError && error.code === "ZOHO_CONNECTION_REGION_MISMATCH",
+    );
+  });
+
+  test("retains a delayed inbound message when received within the overlap window", async () => {
+    const reader = new ZohoMailboxReader({
+      accountId: "account",
+      providerAccountKey: "account",
+      mailboxAddress: "mailbox@example.com",
+      folderId: "inbox-folder",
+      folderKey: "inbox",
+      direction: "INBOUND",
+      dataRegion: "com",
+      pageSize: 5,
+      accessToken: async () => "read-token",
+    }, async () => jsonResponse({ data: [{
+      messageId: "delayed-message",
+      fromAddress: "sender@example.com",
+      toAddress: "mailbox@example.com",
+      sentDateInGMT: String(Date.parse("2026-11-05T08:00:00Z")),
+      receivedTime: String(Date.parse("2026-11-06T10:15:00Z")),
+    }] }));
+    const page = await reader.listMessages({ overlapFrom: "2026-11-06T09:00:00.000Z" });
+    assert.equal(page.messages.length, 1);
+    assert.equal(page.messages[0].externalMessageId, "delayed-message");
+  });
+
   test("parses display-name address lists without retaining display names", () => {
     assert.deepEqual(
       extractZohoAddresses('"Person One" <ONE@example.com>, Person Two &lt;two@example.com&gt;'),
@@ -150,6 +217,7 @@ describe("Sprint 4B reconciliation configuration", () => {
   test("defaults to a 30-minute schedule and 30-day initial lookback", () => {
     const config = getMailboxSyncConfig({});
     assert.equal(config.intervalMinutes, 30);
+    assert.equal(getMailboxSyncConfig({ EMAIL_RECONCILE_INTERVAL_MINUTES: "15" }).intervalMinutes, 30);
     assert.equal(config.initialLookbackDays, 30);
     assert.equal(config.pageSize, 5);
     assert.equal(

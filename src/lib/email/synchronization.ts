@@ -244,6 +244,17 @@ export async function synchronizeMailbox(input: SynchronizeMailboxInput): Promis
     return { status: "BACKOFF", processed: 0, nextRetryAt: cursor.nextRetryAt };
   }
 
+  // The Zoho folder list uses mutable numeric offsets. Record the beginning
+  // of each scan and preserve it across pages. If new mail arrives ahead of
+  // our saved offset, the next completed scan must replay from this earlier
+  // watermark, rather than advancing directly to the completion time.
+  if (!cursor.pageToken) {
+    cursor = await input.prisma.emailSyncCursor.update({
+      where: { id: cursor.id },
+      data: { receivedBefore: now },
+    });
+  }
+
   let processed = 0;
   let pages = 0;
   let hasMore = false;
@@ -292,7 +303,7 @@ export async function synchronizeMailbox(input: SynchronizeMailboxInput): Promis
       where: { id: cursor.id },
       data: {
         receivedBefore: hasMore ? cursor.receivedBefore : now,
-        overlapFrom: hasMore ? cursor.overlapFrom : nextOverlapFrom(now, config),
+        overlapFrom: hasMore ? cursor.overlapFrom : nextOverlapFrom(cursor.receivedBefore ?? now, config),
         pageToken: hasMore ? mailboxCursor.pageToken ?? null : null,
         lastSuccessfulAt: now,
         lastErrorCode: null,

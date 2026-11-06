@@ -23,7 +23,8 @@ export function getMailboxSyncConfig(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): MailboxSyncConfig {
   return {
-    intervalMinutes: boundedInteger(environment.EMAIL_RECONCILE_INTERVAL_MINUTES, 30, 5, 1_440),
+    // This is the static Netlify cron interval, not a runtime-tunable value.
+    intervalMinutes: 30,
     initialLookbackDays: boundedInteger(environment.EMAIL_INITIAL_LOOKBACK_DAYS, 30, 1, 90),
     overlapMinutes: boundedInteger(environment.EMAIL_RECONCILE_OVERLAP_MINUTES, 60, 5, 1_440),
     // Two metadata/header GETs per message plus one list request. Five

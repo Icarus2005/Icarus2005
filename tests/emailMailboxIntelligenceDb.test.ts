@@ -228,6 +228,84 @@ describe(
       }
     });
 
+    test("replays mail arriving during a long offset-paginated backfill", async () => {
+      const suffix = String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+      const connection = await prisma!.mailboxConnection.create({
+        data: { provider: "ZOHO", providerAccountKey: "zoho-account", emailAddress: "mailbox@example.test", enabled: true },
+      });
+      const firstScanAt = new Date("2026-11-06T10:00:00.000Z");
+      const messages = [
+        message({ externalMessageId: "first-" + suffix, fromAddress: "unknown@example.test",
+          sentAt: new Date("2026-11-06T09:55:00.000Z"), receivedAt: new Date("2026-11-06T09:56:00.000Z") }),
+        message({ externalMessageId: "second-" + suffix, fromAddress: "unknown@example.test",
+          sentAt: new Date("2026-11-06T09:00:00.000Z"), receivedAt: new Date("2026-11-06T09:01:00.000Z") }),
+        message({ externalMessageId: "third-" + suffix, fromAddress: "unknown@example.test",
+          sentAt: new Date("2026-11-06T08:30:00.000Z"), receivedAt: new Date("2026-11-06T08:31:00.000Z") }),
+        message({ externalMessageId: "new-arrival-" + suffix, fromAddress: "unknown@example.test",
+          sentAt: new Date("2026-11-06T10:30:00.000Z"), receivedAt: new Date("2026-11-06T10:31:00.000Z") }),
+      ];
+      let listCalls = 0;
+      const reader: MailboxReader = {
+        async listMessages(cursor: MailboxCursor): Promise<MailboxMessagePage> {
+          listCalls += 1;
+          if (listCalls === 1) {
+            assert.equal(cursor.pageToken, undefined);
+            return { messages: messages.slice(0, 2), nextCursor: { ...cursor, pageToken: "3" } };
+          }
+          if (listCalls === 2) {
+            assert.equal(cursor.pageToken, "3");
+            // The new arrival shifted the list offset and repeated message #2.
+            return { messages: [messages[1], messages[2]], nextCursor: null };
+          }
+          assert.equal(cursor.pageToken, undefined);
+          const cutoff = new Date(cursor.overlapFrom!);
+          return {
+            messages: [messages[3], messages[0]].filter((item) => (item.receivedAt ?? item.sentAt) >= cutoff),
+            nextCursor: null,
+          };
+        },
+        async getMessageMetadata(id: string): Promise<NormalizedMailboxMessage> {
+          const found = messages.find((item) => item.externalMessageId === id);
+          if (!found) throw new Error("Unknown mock message");
+          return found;
+        },
+      };
+
+      try {
+        const first = await synchronizeMailbox({
+          prisma: prisma!, connectionId: connection.id, folderKey: "inbox", reader,
+          environment: enabledEnvironment, now: firstScanAt,
+        });
+        assert.equal(first.status, "SUCCESS");
+        const pending = await prisma!.emailSyncCursor.findUniqueOrThrow({
+          where: { mailboxConnectionId_folderKey: { mailboxConnectionId: connection.id, folderKey: "inbox" } },
+        });
+        assert.equal(pending.pageToken, "3");
+        assert.equal(pending.receivedBefore?.toISOString(), firstScanAt.toISOString());
+
+        const second = await synchronizeMailbox({
+          prisma: prisma!, connectionId: connection.id, folderKey: "inbox", reader,
+          environment: enabledEnvironment, now: new Date("2026-11-06T12:00:00.000Z"),
+        });
+        assert.equal(second.status, "SUCCESS");
+        const complete = await prisma!.emailSyncCursor.findUniqueOrThrow({
+          where: { mailboxConnectionId_folderKey: { mailboxConnectionId: connection.id, folderKey: "inbox" } },
+        });
+        // Advancing from completion time instead would silently lose the arrival at 10:30.
+        assert.equal(complete.overlapFrom?.toISOString(), "2026-11-06T09:00:00.000Z");
+
+        const third = await synchronizeMailbox({
+          prisma: prisma!, connectionId: connection.id, folderKey: "inbox", reader,
+          environment: enabledEnvironment, now: new Date("2026-11-06T12:30:00.000Z"),
+        });
+        assert.equal(third.status, "SUCCESS");
+        assert.equal(await prisma!.emailMessage.count({ where: { mailboxConnectionId: connection.id } }), 4);
+        assert.equal(listCalls, 3);
+      } finally {
+        await removeMailbox(connection.id);
+      }
+    });
+
     test("provider outage persists bounded failure state, honors backoff and recovers without duplication", async () => {
       const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const connection = await prisma!.mailboxConnection.create({

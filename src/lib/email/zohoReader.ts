@@ -178,7 +178,9 @@ export class ZohoMailboxReader implements MailboxReader {
     let reachedCutoff = false;
     for (const item of rawItems) {
       const input = this.summaryInput(item);
-      if (cutoff && input.sentAt < cutoff) {
+      // A delayed inbound email may have an old sent date but a recent
+      // receive date. Use mailbox arrival time for the overlap cutoff.
+      if (cutoff && (input.receivedAt ?? input.sentAt) < cutoff) {
         reachedCutoff = true;
         continue;
       }
