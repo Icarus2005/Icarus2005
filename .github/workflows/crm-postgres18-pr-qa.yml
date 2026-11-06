@@ -1,0 +1,97 @@
+name: ArqOne CRM PostgreSQL 18 QA
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Bootstrap this workflow on the existing Sprint 4B branch without
+  # introducing any trigger on the production-connected base branch.
+  push:
+    branches:
+      - feat/sprint-4b-readonly-mailbox-intelligence
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crm-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crm-qa:
+    name: Lint, build and database-backed regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Deliberately local and disposable. The name satisfies both Sprint 4A
+      # and Sprint 4B test guards, preventing silent DB-test skips.
+      DATABASE_URL: postgresql://crm_ci:ci_ephemeral_only@127.0.0.1:5432/sprint4a_disposable_sprint4b_disposable?schema=public
+      EMAIL_FOUNDATION_DISPOSABLE_DB_TESTS: "true"
+      EMAIL_MAILBOX_INTELLIGENCE_DISPOSABLE_DB_TESTS: "true"
+      EMAIL_READ_SYNC_ENABLED: "false"
+      EMAIL_ZOHO_WEBHOOK_ENABLED: "false"
+      EMAIL_RELATIONSHIP_TIMELINE_ENABLED: "false"
+      EMAIL_BODY_RETENTION_ENABLED: "false"
+      EMAIL_SEND_V2_ENABLED: "false"
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: crm_ci
+          POSTGRES_PASSWORD: ci_ephemeral_only
+          POSTGRES_DB: sprint4a_disposable_sprint4b_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm_ci -d sprint4a_disposable_sprint4b_disposable"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out pull request code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify disposable database target
+        run: |
+          node -e 'const u = new URL(process.env.DATABASE_URL); if (u.hostname !== "127.0.0.1" || u.pathname !== "/sprint4a_disposable_sprint4b_disposable") process.exit(1);'
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Apply migrations to disposable PostgreSQL 18
+        run: npx prisma migrate deploy
+
+      - name: Check migration status
+        run: npx prisma migrate status
+
+      - name: Check schema drift
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+      - name: Check ESLint
+        run: npx eslint src netlify tests --ext .ts,.tsx --max-warnings=0
+
+      - name: Run full database-backed test suite
+        run: npm test
+
+      - name: Build production application
+        run: npm run build
