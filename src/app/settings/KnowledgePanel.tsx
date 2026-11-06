@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle, BookOpen, Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X,
+  TriangleAlert as AlertTriangle, BookOpen, Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X,
 } from "lucide-react";
 import ProductBadge from "@/components/ProductBadge";
 import { BUSINESS_LINES, PRODUCTS_META } from "@/lib/products";

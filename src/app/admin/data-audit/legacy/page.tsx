@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { AlertTriangle } from "lucide-react";
+import { TriangleAlert as AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { getDataAudit } from "@/lib/dataAudit";
 import CopyAuditButton from "../CopyAuditButton";

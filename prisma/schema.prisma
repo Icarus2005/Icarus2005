@@ -220,6 +220,94 @@ model TeamMember {
   updatedAt     DateTime      @updatedAt
 }
 
+// ─── Provider-neutral email foundation (Sprint 4A) ──────────────────────────
+// Metadata only: there are intentionally no body, snippet, attachment, raw
+// header or raw provider-payload columns in these models.
+
+model MailboxConnection {
+  id                 String            @id @default(cuid())
+  provider           String
+  providerAccountKey String
+  emailAddress       String
+  dataRegion         String?
+  enabled            Boolean           @default(false)
+  secretReference    String?
+  threads            EmailThread[]
+  messages           EmailMessage[]
+  cursors            EmailSyncCursor[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([provider, providerAccountKey])
+  @@index([enabled])
+}
+
+model EmailThread {
+  id                  String            @id @default(cuid())
+  mailboxConnectionId String
+  mailboxConnection   MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Restrict)
+  providerThreadId    String?
+  subjectKey          String?
+  latestMessageAt     DateTime?
+  messages            EmailMessage[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([mailboxConnectionId, providerThreadId])
+  @@unique([id, mailboxConnectionId])
+  @@index([latestMessageAt])
+}
+
+model EmailMessage {
+  id                       String            @id @default(cuid())
+  mailboxConnectionId      String
+  mailboxConnection        MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Restrict)
+  threadId                 String?
+  thread                   EmailThread?      @relation(fields: [threadId, mailboxConnectionId], references: [id, mailboxConnectionId], onDelete: Restrict)
+  externalMessageId        String
+  providerReplyToMessageId String?
+  internetMessageId        String?
+  inReplyTo                String?
+  referencesJson           Json
+  direction                String
+  fromAddress              String
+  toJson                   Json
+  ccJson                   Json
+  subject                  String?
+  providerSentAt           DateTime
+  providerReceivedAt       DateTime?
+  folderKey                String?
+  syncState                String            @default("VERIFIED")
+  rawPayloadHash           String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  @@unique([mailboxConnectionId, externalMessageId])
+  @@index([internetMessageId])
+  @@index([threadId])
+  @@index([fromAddress])
+  @@index([providerReceivedAt])
+  @@index([syncState])
+}
+
+model EmailSyncCursor {
+  id                  String            @id @default(cuid())
+  mailboxConnectionId String
+  mailboxConnection   MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Cascade)
+  folderKey           String
+  receivedBefore      DateTime?
+  overlapFrom         DateTime?
+  pageToken           String?
+  lastSuccessfulAt    DateTime?
+  lastErrorCode       String?
+  lastErrorAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([mailboxConnectionId, folderKey])
+  @@index([lastSuccessfulAt])
+}
+
 // ─── Core records ────────────────────────────────────────────────────────────
 
 model Lead {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { TriangleAlert as AlertTriangle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 export default function GlobalError({

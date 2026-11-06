@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Papa from "papaparse";
-import { AlertTriangle, Download, UploadCloud } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Download, UploadCloud } from "lucide-react";
 import { PRODUCT_KEYS } from "@/lib/products";
 import { IMPORT_COLUMNS, detectHeaderMismatch, type ImportEntity } from "@/lib/importSchemas";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Search } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Search } from "lucide-react";
 
 // Read-only preview panel. Deliberately no Execute button, no confirm flow —
 // there is no write endpoint behind /api/admin/sprint05 to call. Sprint 05

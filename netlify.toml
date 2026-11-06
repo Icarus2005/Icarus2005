@@ -1,7 +1,18 @@
 [build]
-  # migrate deploy only applies pending migrations (never destructive/reset);
-  # requires DATABASE_URL and DIRECT_URL set as site environment variables.
+  # Non-production contexts never apply migrations. Sprint 4A migration
+  # validation happens only against an explicitly disposable local database.
+  command = "prisma generate && next build"
+
+[context.production]
+  # Preserve the existing production behavior, but production deploy remains an
+  # explicit approval gate outside this PR.
   command = "prisma migrate deploy && prisma generate && next build"
+
+[context.deploy-preview]
+  command = "prisma generate && next build"
+
+[context.branch-deploy]
+  command = "prisma generate && next build"
 
 [build.environment]
   # Prisma's generated client is used at request time by serverless

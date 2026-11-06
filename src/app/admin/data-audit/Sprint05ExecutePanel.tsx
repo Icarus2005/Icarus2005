@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Play, Search } from "lucide-react";
+import { TriangleAlert as AlertTriangle, Play, Search } from "lucide-react";
 
 type StepReport = { category: string; key: string; status: "applied" | "already_applied" | "skipped" | "excluded" | "aborted"; detail: string };
 

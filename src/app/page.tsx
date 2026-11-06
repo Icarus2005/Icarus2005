@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleAlert, Clock3 } from "lucide-react";
+import { TriangleAlert as AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleAlert, Clock3 } from "lucide-react";
 import ProductSelector from "@/components/ProductSelector";
 import ProductBadge from "@/components/ProductBadge";
 import {
