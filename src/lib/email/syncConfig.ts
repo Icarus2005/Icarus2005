@@ -27,11 +27,11 @@ export function getMailboxSyncConfig(
     intervalMinutes: 30,
     initialLookbackDays: boundedInteger(environment.EMAIL_INITIAL_LOOKBACK_DAYS, 30, 1, 90),
     overlapMinutes: boundedInteger(environment.EMAIL_RECONCILE_OVERLAP_MINUTES, 60, 5, 1_440),
-    // Two metadata/header GETs per message plus one list request. Five
-    // messages for each of inbox/sent keeps one scheduled run below Zoho's
-    // documented 30 Mail API requests/minute limit.
-    pageSize: boundedInteger(environment.EMAIL_RECONCILE_PAGE_SIZE, 5, 1, 200),
-    maxPagesPerRun: boundedInteger(environment.EMAIL_RECONCILE_MAX_PAGES, 1, 1, 50),
+    // Fail closed on oversized tuning: the published 30-second scheduled
+    // function must not exceed 22 Zoho Mail GETs across Inbox + Sent per run.
+    // Any higher throughput requires a separately reviewed batching design.
+    pageSize: boundedInteger(environment.EMAIL_RECONCILE_PAGE_SIZE, 5, 1, 5),
+    maxPagesPerRun: boundedInteger(environment.EMAIL_RECONCILE_MAX_PAGES, 1, 1, 1),
     retryBaseMinutes: boundedInteger(environment.EMAIL_RETRY_BASE_MINUTES, 5, 1, 60),
     retryMaxMinutes: boundedInteger(environment.EMAIL_RETRY_MAX_MINUTES, 360, 5, 1_440),
   };
