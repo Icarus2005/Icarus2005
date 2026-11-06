@@ -62,6 +62,7 @@ const relationshipKindStyle: Record<RelationshipTimelineEntry["kind"], string> =
   activity: "bg-brand-100 text-brand-700",
   meeting: "bg-violet-100 text-violet-700",
   proposal: "bg-amber-100 text-amber-700",
+  email: "bg-sky-100 text-sky-700",
 };
 
 /**
@@ -92,9 +93,11 @@ export function RelationshipTimeline({ entries }: { entries: RelationshipTimelin
               </span>
               {entry.product && entry.product !== "UNASSIGNED" && <ProductBadge product={entry.product} />}
             </div>
-            <Link href={entry.href} className="mt-1.5 block text-sm font-semibold text-gray-900 hover:text-brand-700">
-              {entry.title}
-            </Link>
+            {entry.href ? (
+              <Link href={entry.href} className="mt-1.5 block text-sm font-semibold text-gray-900 hover:text-brand-700">{entry.title}</Link>
+            ) : (
+              <p className="mt-1.5 text-sm font-semibold text-gray-900">{entry.title}</p>
+            )}
             {entry.detail && <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{entry.detail}</p>}
             <p className="mt-1 text-[11px] text-gray-400">{entry.provenance}</p>
           </div>

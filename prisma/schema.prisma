@@ -279,15 +279,31 @@ model EmailMessage {
   folderKey                String?
   syncState                String            @default("VERIFIED")
   rawPayloadHash           String?
+  contactId                String?
+  contact                  Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  accountId                String?
+  account                  Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  matchState               String            @default("UNMATCHED") // EXACT | UNMATCHED | AMBIGUOUS
+  matchBasis               String?
+  replyState               String            @default("NOT_A_REPLY") // CONFIRMED | REVIEW_REQUIRED | NOT_A_REPLY
+  replyBasis               String?
+  replyToMessageId         String?
+  replyToMessage           EmailMessage?     @relation("EmailMessageReplies", fields: [replyToMessageId, mailboxConnectionId], references: [id, mailboxConnectionId], onDelete: Restrict)
+  replies                  EmailMessage[]    @relation("EmailMessageReplies")
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
 
   @@unique([mailboxConnectionId, externalMessageId])
+  @@unique([id, mailboxConnectionId])
   @@index([internetMessageId])
   @@index([threadId])
   @@index([fromAddress])
   @@index([providerReceivedAt])
   @@index([syncState])
+  @@index([contactId, providerSentAt])
+  @@index([accountId, providerSentAt])
+  @@index([matchState, providerReceivedAt])
+  @@index([replyState])
 }
 
 model EmailSyncCursor {
@@ -301,6 +317,10 @@ model EmailSyncCursor {
   lastSuccessfulAt    DateTime?
   lastErrorCode       String?
   lastErrorAt         DateTime?
+  lastAttemptAt       DateTime?
+  consecutiveFailures Int               @default(0)
+  nextRetryAt         DateTime?
+  lastRunMessageCount Int               @default(0)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
@@ -385,6 +405,7 @@ model Account {
   opportunities   Opportunity[]
   activities      Activity[]
   tasks           Task[]
+  emailMessages   EmailMessage[]
   transcripts     MeetingTranscript[]
   proposals       Proposal[]
   accountProducts AccountProduct[]
@@ -422,6 +443,7 @@ model Contact {
   leadsAsPrimaryContact Lead[]               @relation("LeadPrimaryContact")
   activities            Activity[]
   tasks                 Task[]
+  emailMessages         EmailMessage[]
   transcripts           MeetingTranscript[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
