@@ -40,6 +40,7 @@ const MAIN_NAV: NavItem[] = [
 ];
 
 const WORK_NAV: NavItem[] = [
+  { href: "/fundraising", label: "Fundraising", icon: TrendingUp },
   { href: "/meetings", label: "Meetings", icon: Mic },
   { href: "/proposals", label: "Proposals", icon: FileSignature, carryProduct: true },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, carryProduct: true },
@@ -55,6 +56,7 @@ const SYSTEM_NAV: NavItem[] = [
 ];
 
 const PRODUCT_ICONS: Record<string, LucideIcon> = {
+  BRANDSPRK: TrendingUp,
   PLACEPULSE: MapPin,
   SALESX: TrendingUp,
   PLYMIO: GraduationCap,

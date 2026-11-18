@@ -395,6 +395,7 @@ model Account {
 }
 
 model Contact {
+  fundraisingProspects FundraisingProspect[]
   id                    String               @id @default(cuid())
   firstName             String
   lastName              String
@@ -497,6 +498,8 @@ model OpportunityContact {
 // account/contact/lead/opportunity is logged here. Never create a second,
 // overlapping interaction model; extend `type` instead.
 model Activity {
+  fundraisingProspectId String?
+  fundraisingProspect FundraisingProspect? @relation(fields: [fundraisingProspectId], references: [id], onDelete: SetNull)
   id            String       @id @default(cuid())
   type          String // MEETING | CALL | EMAIL | WHATSAPP | LINKEDIN | DEMO | EVENT_INTERACTION | NOTE | OTHER
   subject       String
@@ -526,12 +529,15 @@ model Activity {
 
   @@index([product])
   @@index([date])
+  @@index([fundraisingProspectId])
 }
 
 // The canonical future commitment — "what's next" for a record. Lists and
 // detail pages should derive "Next Interaction" from the nearest open Task
 // (see src/lib/nextInteraction.ts) rather than inventing another field.
 model Task {
+  fundraisingProspectId String?
+  fundraisingProspect FundraisingProspect? @relation(fields: [fundraisingProspectId], references: [id], onDelete: SetNull)
   id            String       @id @default(cuid())
   title         String
   notes         String?
@@ -561,4 +567,55 @@ model Task {
   @@index([product])
   @@index([status])
   @@index([dueDate])
+  @@index([fundraisingProspectId])
+}
+
+// Capital raised is deliberately separate from commercial Opportunity revenue.
+// Contact, Task and Activity remain the shared relationship and interaction records.
+model FundraisingProspect {
+  id              String                @id @default(cuid())
+  roundKey        String                @default("brandsprk-preseed-2026")
+  sourceKey       String
+  name            String
+  routeType       String
+  priority        String
+  status          String                @default("NOT_STARTED")
+  nextAction      String
+  notes           String
+  evidence        String
+  drafts          Json
+  source          String
+  sourceStatus    String
+  contactId       String?
+  contact         Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  committedUsd    Decimal               @default(0) @db.Decimal(14, 2)
+  receivedUsd     Decimal               @default(0) @db.Decimal(14, 2)
+  capitalEvidence String                @default("")
+  firstSentAt     DateTime?
+  lastSentAt      DateTime?
+  lastReplyAt     DateTime?
+  tasks           Task[]
+  activities      Activity[]
+  dispatches      FundraisingDispatch[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([roundKey, sourceKey])
+  @@index([status, priority])
+}
+
+// Delivery reservation, not an interaction history. Uncertain deliveries block
+// retries until a human checks the Sent folder and reconciles the outcome.
+model FundraisingDispatch {
+  id                String              @id
+  prospectId        String
+  prospect          FundraisingProspect @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  payloadHash       String
+  payload           Json
+  state             String              @default("SENDING")
+  providerMessageId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([prospectId, state])
 }
