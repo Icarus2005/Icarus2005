@@ -4,6 +4,10 @@ One CRM, multiple ArqOne business lines — **PlacePulse**, **Plymio**, **AI Nav
 and **ArqOne Advisory** — with product-aware records, filters, workspaces,
 pipelines, tasks, accounts and reporting.
 
+BrandSprk is also available in the product catalogue. Its separate
+[fundraising workspace](docs/BRANDSPRK_FUNDRAISING.md) supports private tracker
+imports, reviewed outreach, shared CRM follow-up tasks and capital tracking.
+
 ## Stack
 
 - **Next.js 14** (App Router, TypeScript)

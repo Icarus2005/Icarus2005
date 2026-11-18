@@ -7,7 +7,8 @@ import { sendApprovedEmail, SendApprovedEmailInput } from "@/lib/email/sendAppro
  * Approved-send route (Sprint 06D, Phase 5).
  *
  * DRAFT → HUMAN REVIEW → APPROVE → SEND VIA ZOHO → RECORD ACTIVITY. This is
- * the only route in the app that calls an email provider. Authorization is
+ * the commercial-email route. Fundraising has its own reviewed-send route
+ * with delivery reservations at /api/fundraising. Authorization is
  * the same shared-password gate that protects every other route
  * (src/middleware.ts) — there is no per-user auth model yet to check
  * against, consistent with every other API route in this app.

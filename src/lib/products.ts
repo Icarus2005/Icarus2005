@@ -3,6 +3,7 @@
 // Canonical keys are stored in the database; labels are display-only.
 
 export const PRODUCT_KEYS = [
+  "BRANDSPRK",
   "PLACEPULSE",
   "SALESX",
   "PLYMIO",
@@ -26,6 +27,12 @@ export type ProductMeta = {
 };
 
 export const PRODUCTS_META: Record<ProductKey, ProductMeta> = {
+  BRANDSPRK: {
+    key: "BRANDSPRK", label: "BrandSprk", slug: "brandsprk",
+    description: "Brand context and creative decision workflows",
+    badge: "bg-fuchsia-100 text-fuchsia-700", dot: "bg-fuchsia-500",
+    text: "text-fuchsia-600", soft: "bg-fuchsia-50",
+  },
   PLACEPULSE: {
     key: "PLACEPULSE",
     label: "PlacePulse",
@@ -90,6 +97,7 @@ export const PRODUCTS_META: Record<ProductKey, ProductMeta> = {
 
 // Business lines shown in navigation / selectors (ordered), excluding UNASSIGNED
 export const BUSINESS_LINES: ProductKey[] = [
+  "BRANDSPRK",
   "PLACEPULSE",
   "SALESX",
   "PLYMIO",
@@ -188,6 +196,18 @@ const CLOSED: StageTemplate[] = [
 ];
 
 export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
+  {
+    id: "pl_brandsprk", name: "BrandSprk Sales", productKey: "BRANDSPRK",
+    stages: [
+      { key: "IDENTIFIED", name: "Identified", probability: 5 },
+      { key: "QUALIFIED", name: "Qualified", probability: 20 },
+      { key: "DISCOVERY", name: "Discovery", probability: 30 },
+      { key: "PILOT", name: "Pilot / Demo", probability: 50 },
+      { key: "PROPOSAL", name: "Proposal", probability: 65 },
+      { key: "NEGOTIATION", name: "Negotiation", probability: 80 },
+      ...CLOSED,
+    ],
+  },
   {
     id: "pl_placepulse",
     name: "PlacePulse Sales",
