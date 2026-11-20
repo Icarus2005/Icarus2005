@@ -46,7 +46,18 @@ export default function FundraisingPage() {
   const todayDubai = dubaiDay(new Date());
   const due = (p: Prospect) => p.tasks.some(t => t.dueDate && dubaiDay(t.dueDate) <= todayDubai);
   const actionable = (p: Prospect) => p.priority !== "Hold" && !["PAUSED", "REJECTED", "HOLD", "COMMITTED"].includes(p.status) && (due(p) || ["NOT_STARTED", "SUBMITTED_PREVIOUSLY", "NEEDS_QUALIFICATION"].includes(p.status));
-  const list = prospects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) && (!priority || p.priority === priority) && (!queueOnly || actionable(p)));
+  // Put overdue follow-ups first, followed by the active Now/Qualify queue.
+  // Sorting changes presentation only; it never changes saved investor priorities or statuses.
+  const list = prospects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) && (!priority || p.priority === priority) && (!queueOnly || actionable(p)))
+    .sort((a, b) => {
+      const overdueDifference = Number(due(b)) - Number(due(a));
+      if (overdueDifference) return overdueDifference;
+      const priorityDifference = PRIORITIES.indexOf(a.priority as typeof PRIORITIES[number]) - PRIORITIES.indexOf(b.priority as typeof PRIORITIES[number]);
+      if (priorityDifference) return priorityDifference;
+      return a.name.localeCompare(b.name);
+    });
+  const overdueCount = prospects.filter(due).length;
+  const activeCount = prospects.filter(p => p.priority !== "Hold" && !["PAUSED", "REJECTED", "HOLD", "COMMITTED"].includes(p.status)).length;
   async function loadImport(file: File) {
     setBusy(true); setError(""); setPreview(null); setRows(null);
     try {
@@ -83,9 +94,10 @@ export default function FundraisingPage() {
       <select aria-label="Filter priority" className={`${inputClass} max-w-40`} value={priority} onChange={e => setPriority(e.target.value)}><option value="">All priorities</option>{PRIORITIES.map(s => <option key={s}>{s}</option>)}</select>
       <label className="text-sm"><input type="checkbox" checked={queueOnly} onChange={e => setQueueOnly(e.target.checked)} /> Daily action queue</label>
       <button className="text-sm text-brand-700 underline" onClick={() => reload().catch(e => setError(e.message))}>Refresh</button>
+      <p className="text-xs text-gray-600" role="status">{list.length} shown · {activeCount} active · {overdueCount} overdue</p>
     </div>
     <div className="grid items-start gap-5 xl:grid-cols-[330px_1fr]">
-      <div className="space-y-2">{list.length ? list.map(p => <button key={p.id} onClick={() => setSelected(p.id)} className={`w-full rounded-lg border p-3 text-left ${selected === p.id ? "border-brand-600 bg-brand-50" : "bg-white"}`}><p className="font-medium">{p.name}</p><p className="text-xs text-gray-600">{p.priority} · {p.routeType} · {p.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm">{p.nextAction}</p>{p.tasks[0] && <p className={`mt-1 text-xs ${due(p) ? "text-red-700" : "text-gray-500"}`}>Next follow-up: {date(p.tasks[0].dueDate)}</p>}</button>) : <p className="text-sm text-gray-500">No routes in this view.</p>}</div>
+      <div className="space-y-2">{list.length ? list.map(p => <button key={p.id} onClick={() => setSelected(p.id)} className={`w-full rounded-lg border p-3 text-left ${selected === p.id ? "border-brand-600 bg-brand-50" : "bg-white"}`}><p className="font-medium">{p.name}</p><p className="text-xs text-gray-600">{p.priority} · {p.routeType} · {p.status.replaceAll("_", " ")}</p><p className="mt-1 line-clamp-2 text-sm">{p.nextAction}</p>{due(p) && <p className="mt-1 text-xs font-semibold text-red-700">Overdue follow-up</p>}{p.tasks[0] && <p className={`mt-1 text-xs ${due(p) ? "text-red-700" : "text-gray-500"}`}>Next follow-up: {date(p.tasks[0].dueDate)}</p>}</button>) : <p className="text-sm text-gray-500">No routes in this view.</p>}</div>
       {p ? <ProspectDetail key={`${p.id}-${p.activities[0]?.id ?? "new"}`} prospect={p} configured={configured} reload={reload} /> : <div className="rounded-lg border bg-white p-8 text-gray-500">Select a route to review the relationship, drafts and next action.</div>}
     </div>
   </div>;
