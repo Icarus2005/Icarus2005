@@ -58,6 +58,26 @@ export default function FundraisingPage() {
     });
   const overdueCount = prospects.filter(due).length;
   const activeCount = prospects.filter(p => p.priority !== "Hold" && !["PAUSED", "REJECTED", "HOLD", "COMMITTED"].includes(p.status)).length;
+  // Route-based funnel: these counts are not unique investor counts or proven conversion rates.
+  // Never infer an outreach send from SUBMITTED_PREVIOUSLY without a confirmed send timestamp.
+  const confirmedOutreachCount = prospects.filter(p => Boolean(p.firstSentAt)).length;
+  const conversationCount = prospects.filter(p => ["REPLIED", "MEETING", "DILIGENCE", "COMMITTED"].includes(p.status)).length;
+  const meetingCount = prospects.filter(p => ["MEETING", "DILIGENCE", "COMMITTED"].includes(p.status)).length;
+  const diligenceCount = prospects.filter(p => ["DILIGENCE", "COMMITTED"].includes(p.status)).length;
+  const committedCount = prospects.filter(p => p.status === "COMMITTED").length;
+  const submittedPreviouslyCount = prospects.filter(p => p.status === "SUBMITTED_PREVIOUSLY" && !p.firstSentAt).length;
+  const commitments = prospects.reduce((n, p) => n + Number(p.committedUsd), 0);
+  const received = prospects.reduce((n, p) => n + Number(p.receivedUsd), 0);
+  const committedPercent = target > 0 ? Math.min(100, Math.max(0, commitments / target * 100)) : 0;
+  const receivedPercent = target > 0 ? Math.min(100, Math.max(0, received / target * 100)) : 0;
+  const funnelStages = [
+    ["Routes tracked", prospects.length],
+    ["Confirmed outreach", confirmedOutreachCount],
+    ["Conversation / reply stage", conversationCount],
+    ["Meeting or later", meetingCount],
+    ["Diligence or later", diligenceCount],
+    ["Committed status", committedCount],
+  ] as const;
   async function loadImport(file: File) {
     setBusy(true); setError(""); setPreview(null); setRows(null);
     try {
@@ -82,6 +102,27 @@ export default function FundraisingPage() {
       {[["Round target", usd(target)], ["Confirmed commitments", usd(prospects.reduce((n,p) => n + Number(p.committedUsd), 0))], ["Cash received", usd(prospects.reduce((n,p) => n + Number(p.receivedUsd), 0))], ["Actions to review", String(prospects.filter(actionable).length)]].map(([label,value]) => <div key={label} className="rounded-lg border bg-white p-4"><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-semibold">{value}</p></div>)}
     </div>
     <p className="text-xs text-gray-600">Capital totals are separate from commercial revenue. Tasks appear automatically after a confirmed send. No emails are sent automatically. Dates are Dubai time.</p>
+    <section aria-labelledby="fundraising-evidence-heading" className="rounded-lg border bg-white p-4 md:p-5">
+      <h2 id="fundraising-evidence-heading" className="text-lg font-semibold">Fundraising evidence</h2>
+      <p className="mt-1 text-xs text-gray-600">Route-based operational indicators, not unique-investor conversion rates. Stages reflect saved CRM status. Historic submissions are not counted as confirmed sends.</p>
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-medium">Investor engagement stages</h3>
+          <dl className="space-y-2 text-sm">
+            {funnelStages.map(([label, count]) => <div key={label} className="flex items-center justify-between gap-3"><dt className="text-gray-600">{label}</dt><dd className="font-semibold tabular-nums">{count}</dd></div>)}
+          </dl>
+          {submittedPreviouslyCount > 0 && <p className="mt-3 text-xs text-gray-600">{submittedPreviouslyCount} historical submission route(s) await verification; not counted as new outreach.</p>}
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-medium">Capital against round target</h3>
+          <div className="space-y-4">
+            <div><div className="mb-1 flex justify-between gap-2 text-sm"><span>Confirmed commitments</span><span className="tabular-nums">{usd(commitments)} / {usd(target)}</span></div><div role="progressbar" aria-label="Confirmed commitments progress" aria-valuenow={Math.round(committedPercent)} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full bg-brand-700" style={{ width: `${committedPercent}%` }} /></div></div>
+            <div><div className="mb-1 flex justify-between gap-2 text-sm"><span>Cash received</span><span className="tabular-nums">{usd(received)} / {usd(target)}</span></div><div role="progressbar" aria-label="Received cash progress" aria-valuenow={Math.round(receivedPercent)} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full bg-gray-700" style={{ width: `${receivedPercent}%` }} /></div></div>
+          </div>
+          <p className="mt-3 text-xs text-gray-600">Only evidence-backed confirmed commitments and received funds are included. These are not subscription revenue.</p>
+        </div>
+      </div>
+    </section>
     {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     <details className="rounded-lg border bg-white p-4" open={!prospects.length}>
       <summary className="cursor-pointer font-medium">Import private funding tracker</summary>
