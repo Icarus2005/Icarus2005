@@ -54,6 +54,10 @@ function WorkspacePanel() {
           </span>
         </div>
         <div className="flex justify-between">
+          <span className="text-gray-500">Mailbox synchronization</span>
+          <Link href="/admin/email-health" className="font-medium text-brand-600 hover:underline">View disabled health gate</Link>
+        </div>
+        <div className="flex justify-between">
           <span className="text-gray-500">Local reset</span>
           <span className="font-mono text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded">npm run db:reset</span>
         </div>

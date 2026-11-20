@@ -24,6 +24,7 @@ import ProductBadge from "@/components/ProductBadge";
 import { RelationshipTimeline } from "@/components/Timeline";
 import RelationshipActions from "@/components/RelationshipActions";
 import SalesCopilotPanel from "@/components/SalesCopilotPanel";
+import { getEmailFeatureFlags } from "@/lib/email/featureFlags";
 
 async function getContactMemory(id: string) {
   const contact = await prisma.contact.findUnique({
@@ -40,7 +41,8 @@ async function getContactMemory(id: string) {
   });
   if (!contact) return null;
 
-  const [activities, tasks, meetings, proposals] = await Promise.all([
+  const emailTimelineEnabled = getEmailFeatureFlags().EMAIL_RELATIONSHIP_TIMELINE_ENABLED;
+  const [activities, tasks, meetings, proposals, emails] = await Promise.all([
     prisma.activity.findMany({
       where: { contactId: id },
       include: {
@@ -69,15 +71,23 @@ async function getContactMemory(id: string) {
       include: { transcript: { select: { id: true, title: true } }, opportunity: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    emailTimelineEnabled
+      ? prisma.emailMessage.findMany({
+          where: { contactId: id, matchState: "EXACT" },
+          select: { id: true, direction: true, subject: true, providerSentAt: true, replyState: true, replyBasis: true },
+          orderBy: { providerSentAt: "desc" },
+          take: 100,
+        })
+      : Promise.resolve([]),
   ]);
-  return { contact, activities, tasks, meetings, proposals };
+  return { contact, activities, tasks, meetings, proposals, emails };
 }
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const memory = await getContactMemory(id);
   if (!memory) notFound();
-  const { contact, activities, tasks, meetings, proposals } = memory;
+  const { contact, activities, tasks, meetings, proposals, emails } = memory;
   const linkedOpportunities = contact.opportunities.map((item) => item.opportunity);
 
   const productEvidence = buildProductEvidence({
@@ -105,6 +115,10 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       ...proposal,
       href: `/proposals/${proposal.id}`,
       provenance: proposal.transcript ? `Linked through Meeting: ${proposal.transcript.title}` : "Linked Proposal",
+    })),
+    emails: emails.map((email) => ({
+      ...email,
+      provenance: "Mailbox metadata · exact Contact email match",
     })),
   });
   const relationshipTasks: RelationshipTaskRef[] = tasks.map((task) => ({
@@ -228,7 +242,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       </section>
 
       <section className="card mt-6 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Unified relationship timeline</h2><p className="mt-1 text-xs text-gray-500">Only directly linked Contact Activities and Meetings are shown. Proposal links require a Contact-linked Meeting.</p></div><Link href={`/activities/new?contactId=${contact.id}&accountId=${contact.accountId}`} className="text-xs font-semibold text-brand-600">Log Activity</Link></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Unified relationship timeline</h2><p className="mt-1 text-xs text-gray-500">Direct records plus {emails.length} exact-match, metadata-only Emails. Message content is never stored.</p></div><Link href={`/activities/new?contactId=${contact.id}&accountId=${contact.accountId}`} className="text-xs font-semibold text-brand-600">Log Activity</Link></div>
         <div className="mt-4"><RelationshipTimeline entries={timeline} /></div>
       </section>
 

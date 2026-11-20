@@ -5,12 +5,12 @@ type DateValue = Date | string;
 
 export type RelationshipTimelineEntry = {
   key: string;
-  kind: "activity" | "meeting" | "proposal";
+  kind: "activity" | "meeting" | "proposal" | "email";
   label: string;
   title: string;
   detail: string | null;
   date: DateValue;
-  href: string;
+  href: string | null;
   provenance: string;
   product: string | null;
 };
@@ -43,6 +43,15 @@ type TimelineInput = {
     href: string;
     provenance: string;
     product?: string | null;
+  }>;
+  emails?: Array<{
+    id: string;
+    direction: string;
+    subject: string | null;
+    providerSentAt: DateValue;
+    replyState: string;
+    replyBasis: string | null;
+    provenance: string;
   }>;
 };
 
@@ -84,6 +93,21 @@ export function buildRelationshipTimeline(input: TimelineInput): RelationshipTim
       href: proposal.href,
       provenance: proposal.provenance,
       product: proposal.product ?? null,
+    })),
+    ...(input.emails ?? []).map((email) => ({
+      key: `email:${email.id}`,
+      kind: "email" as const,
+      label: email.direction === "INBOUND" ? "Email received" : "Email sent",
+      title: email.subject ?? "(No subject)",
+      detail: email.replyState === "CONFIRMED"
+        ? `Confirmed reply · ${email.replyBasis ?? "verified evidence"}`
+        : email.replyState === "REVIEW_REQUIRED"
+          ? "Possible reply · review required"
+          : "Mailbox metadata",
+      date: email.providerSentAt,
+      href: null,
+      provenance: email.provenance,
+      product: null,
     })),
   ];
 

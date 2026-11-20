@@ -26,6 +26,7 @@ import {
 import ProductBadge from "@/components/ProductBadge";
 import { RelationshipTimeline } from "@/components/Timeline";
 import RelationshipActions from "@/components/RelationshipActions";
+import { getEmailFeatureFlags } from "@/lib/email/featureFlags";
 
 async function getAccountMemory(id: string) {
   const account = await prisma.account.findUnique({
@@ -57,7 +58,8 @@ async function getAccountMemory(id: string) {
   });
   if (!account) return null;
 
-  const [activities, tasks, meetings, proposals] = await Promise.all([
+  const emailTimelineEnabled = getEmailFeatureFlags().EMAIL_RELATIONSHIP_TIMELINE_ENABLED;
+  const [activities, tasks, meetings, proposals, emails] = await Promise.all([
     prisma.activity.findMany({
       where: {
         OR: [
@@ -109,9 +111,17 @@ async function getAccountMemory(id: string) {
       include: { opportunity: { select: { id: true, name: true } }, transcript: { select: { id: true, title: true } } },
       orderBy: { createdAt: "desc" },
     }),
+    emailTimelineEnabled
+      ? prisma.emailMessage.findMany({
+          where: { accountId: id, matchState: "EXACT" },
+          select: { id: true, direction: true, subject: true, providerSentAt: true, replyState: true, replyBasis: true },
+          orderBy: { providerSentAt: "desc" },
+          take: 100,
+        })
+      : Promise.resolve([]),
   ]);
 
-  return { account, activities, tasks, meetings, proposals };
+  return { account, activities, tasks, meetings, proposals, emails };
 }
 
 function words(value: string) {
@@ -122,7 +132,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const memory = await getAccountMemory(id);
   if (!memory) notFound();
-  const { account, activities, tasks, meetings, proposals } = memory;
+  const { account, activities, tasks, meetings, proposals, emails } = memory;
 
   const productEvidence = buildProductEvidence({
     accountProducts: account.accountProducts.map((item) => ({ productKey: item.productKey, relationshipState: item.relationshipState })),
@@ -168,6 +178,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         : proposal.opportunity
           ? `Derived through Opportunity: ${proposal.opportunity.name}`
           : "Linked Proposal",
+    })),
+    emails: emails.map((email) => ({
+      ...email,
+      provenance: "Mailbox metadata · exact Contact email match derived this Account",
     })),
   });
 
@@ -335,7 +349,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       </section>
 
       <section className="card mt-6 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Unified relationship timeline</h2><p className="mt-1 text-xs text-gray-500">{activities.length} Activities · {meetings.length} Meetings · {proposals.length} Proposals. Source records remain distinct.</p></div><Link href={`/activities/new?accountId=${account.id}`} className="text-xs font-semibold text-brand-600">Log Activity</Link></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Unified relationship timeline</h2><p className="mt-1 text-xs text-gray-500">{activities.length} Activities · {meetings.length} Meetings · {proposals.length} Proposals · {emails.length} metadata-only Emails. Source records remain distinct.</p></div><Link href={`/activities/new?accountId=${account.id}`} className="text-xs font-semibold text-brand-600">Log Activity</Link></div>
         <div className="mt-4"><RelationshipTimeline entries={timeline} /></div>
       </section>
     </div>
