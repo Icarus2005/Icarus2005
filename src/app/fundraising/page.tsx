@@ -167,7 +167,7 @@ export default function FundraisingPage() {
 function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVentureContacted }: { prospect: Prospect; configured: boolean; reload: () => Promise<void>; briefingUrl: string; crossVentureContacted: boolean }) {
   const [form, setForm] = useState(p);
   const [draftIndex, setDraftIndex] = useState(0);
-  const [subject, setSubject] = useState(p.drafts[0]?.subject ?? "BrandSprk pre-seed");
+  const [subject, setSubject] = useState(p.drafts[0]?.subject ?? `${FUNDRAISING_ROUNDS[p.roundKey].label} pre-seed`);
   const [body, setBody] = useState(p.drafts[0]?.body ?? "");
   const [kind, setKind] = useState(p.firstSentAt ? "FOLLOWUP_1" : "INITIAL");
   const [channel, setChannel] = useState("EMAIL");
