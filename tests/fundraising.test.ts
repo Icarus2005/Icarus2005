@@ -99,7 +99,17 @@ describe("fundraising workflow against disposable Postgres", { skip: !safeDb }, 
     const provider = fake(async () => { notifyProviderStarted(); await releaseProvider; });
     const firstSend = sendFundraisingEmail(brand.id, send(brand.contact!.email!), provider);
     // The first claim is committed and the provider call is intentionally held.
-    await providerStarted;
+    // Fail quickly if claim validation aborts before reaching the provider.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        providerStarted,
+        firstSend.then(() => { throw new Error("Send finished without provider start."); }),
+        new Promise<void>((_, reject) => { timer = setTimeout(() => reject(new Error("Timed out before first provider call.")), 5000); }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     try {
       await assert.rejects(
         sendFundraisingEmail(place.id, send(brand.contact!.email!), provider),
