@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { EmailProvider } from "@/lib/email/provider";
 import { isValidEmail } from "@/lib/email/sendApprovedEmail";
-import { actualDate, choice, followupDate, money, parseDrafts, parseImport, PRIORITIES, requiredText, ROUND_KEY, SEND_KINDS, SendKind, STATUSES } from "./rules";
+import { actualDate, choice, followupDate, money, parseDrafts, parseImport, PRIORITIES, requiredText, ROUND_KEY, ROUND_KEYS, fundraisingRound, RoundKey, SEND_KINDS, SendKind, STATUSES } from "./rules";
 
 type Tx = Prisma.TransactionClient;
 export class FundraisingError extends Error {
@@ -12,7 +12,7 @@ export class FundraisingError extends Error {
 async function locked(tx: Tx, id: string) {
   await tx.$queryRaw`SELECT id FROM "FundraisingProspect" WHERE id = ${id} FOR UPDATE`;
   const p = await tx.fundraisingProspect.findUnique({ where: { id }, include: { contact: true } });
-  if (!p || p.roundKey !== ROUND_KEY) throw new FundraisingError("Fundraising route not found.", 404);
+  if (!p || !ROUND_KEYS.includes(p.roundKey as RoundKey)) throw new FundraisingError("Fundraising route not found.", 404);
   return p;
 }
 type Prospect = Awaited<ReturnType<typeof locked>>;
@@ -42,7 +42,7 @@ async function validateSend(tx: Tx, p: Prospect, kind: SendKind) {
 async function recordSend(tx: Tx, p: Prospect, data: { kind: SendKind; subject: string; body: string; channel: string; at: Date; key: string; providerMessageId?: string | null }) {
   const activity = await tx.activity.create({ data: {
     type: data.channel, subject: data.subject, notes: data.body, date: data.at,
-    product: "BRANDSPRK", fundraisingProspectId: p.id, contactId: p.contactId,
+    product: fundraisingRound(p.roundKey).product, fundraisingProspectId: p.id, contactId: p.contactId,
     accountId: p.contact?.accountId, idempotencyKey: data.key, providerMessageId: data.providerMessageId,
   } });
   // A reply/pause recorded while a provider call was in flight must still stop the sequence.
@@ -55,7 +55,7 @@ async function recordSend(tx: Tx, p: Prospect, data: { kind: SendKind; subject: 
     for (const n of [1, 2]) await tx.task.create({ data: {
       id: taskId(p.id, n), title: `${p.name}: ${n === 1 ? "first" : "final"} fundraising follow-up`,
       notes: "Review and send manually. Mon-Fri business days in Dubai; no holiday calendar. Stop on reply. No automatic sending.",
-      dueDate: followupDate(data.at, n * 5), product: "BRANDSPRK", fundraisingProspectId: p.id,
+      dueDate: followupDate(data.at, n * 5), product: fundraisingRound(p.roundKey).product, fundraisingProspectId: p.id,
       contactId: p.contactId, accountId: p.contact?.accountId,
     } });
   } else if (data.kind === "FOLLOWUP_1" || data.kind === "FOLLOWUP_2") {
@@ -65,13 +65,13 @@ async function recordSend(tx: Tx, p: Prospect, data: { kind: SendKind; subject: 
   return activity;
 }
 
-export async function importProspects(input: unknown, preview: boolean) {
+export async function importProspects(input: unknown, preview: boolean, roundKey: RoundKey = ROUND_KEY) {
   const rows = parseImport(input);
-  const existing = await prisma.fundraisingProspect.findMany({ where: { roundKey: ROUND_KEY, sourceKey: { in: rows.map(r => r.sourceKey) } }, select: { sourceKey: true } });
+  const existing = await prisma.fundraisingProspect.findMany({ where: { roundKey, sourceKey: { in: rows.map(r => r.sourceKey) } }, select: { sourceKey: true } });
   const found = new Set(existing.map(p => p.sourceKey));
   if (preview) return rows.map(r => ({ ...r, operation: found.has(r.sourceKey) ? "SKIP_EXISTING" : "CREATE" }));
   // Unique source key + createMany skipDuplicates makes concurrent/repeated imports safe.
-  return prisma.fundraisingProspect.createMany({ data: rows.map(r => ({ ...r, roundKey: ROUND_KEY })), skipDuplicates: true });
+  return prisma.fundraisingProspect.createMany({ data: rows.map(r => ({ ...r, roundKey })), skipDuplicates: true });
 }
 
 export async function updateProspect(id: string, input: Record<string, unknown>) {
@@ -120,7 +120,7 @@ export async function logEvent(id: string, input: Record<string, unknown>) {
       if (p.lastSentAt && at < p.lastSentAt) throw new FundraisingError("Send timestamp predates the last recorded send.");
       return recordSend(tx, p, { kind, subject, body, channel, at, key });
     }
-    const result = await tx.activity.create({ data: { type: channel, subject, notes: body, date: at, product: "BRANDSPRK", fundraisingProspectId: id, contactId: p.contactId, accountId: p.contact?.accountId, idempotencyKey: key } });
+    const result = await tx.activity.create({ data: { type: channel, subject, notes: body, date: at, product: fundraisingRound(p.roundKey).product, fundraisingProspectId: id, contactId: p.contactId, accountId: p.contact?.accountId, idempotencyKey: key } });
     await tx.fundraisingProspect.update({ where: { id }, data: { status: action === "REPLY" ? "REPLIED" : action === "REJECT" ? "REJECTED" : "PAUSED", ...(action === "REPLY" ? { lastReplyAt: at } : {}) } });
     await stopTasks(tx, id);
     return result;
@@ -149,6 +149,22 @@ export async function sendFundraisingEmail(id: string, input: Record<string, unk
     }
     if (p.sourceStatus === "Submitted previously") throw new FundraisingError("Use the original submission thread in Zoho, then record the confirmed send.");
     if (!p.contact?.email || p.contact.email.toLowerCase() !== to) throw new FundraisingError("Recipient must match the linked CRM contact email.");
+    // Same investor email may be represented by different CRM contacts across ventures.
+    // Do not silently pitch a second venture when a verified first outreach exists.
+    // The operator may use the existing thread outside this sender and log its actual outcome.
+    const otherVentureSend = await tx.fundraisingProspect.findFirst({
+      where: {
+        id: { not: p.id },
+        roundKey: { in: ROUND_KEYS.filter(key => key !== p.roundKey) },
+        firstSentAt: { not: null },
+        contact: { is: { email: { equals: to, mode: "insensitive" } } },
+      },
+      select: { id: true },
+    });
+    if (otherVentureSend) throw new FundraisingError(
+      "This investor has recorded outreach for the other venture. Review that conversation before any new email. Use the existing thread and record the actual event manually.",
+      409,
+    );
     await validateSend(tx, p, kind);
     if (await tx.fundraisingDispatch.findFirst({ where: { prospectId: id, state: { in: ["SENDING", "UNCERTAIN"] } } })) throw new FundraisingError("Another delivery is unresolved for this route.", 409);
     await tx.fundraisingDispatch.create({ data: { id: key, prospectId: id, payloadHash: hash, payload } });
@@ -186,7 +202,7 @@ export async function reconcileDelivery(id: string, input: Record<string, unknow
       const payload = attempt.payload as { kind: SendKind; subject: string; body: string };
       await recordSend(tx, p, { ...payload, channel: "EMAIL", at, key: `fundraising-send:${dispatchId}`, providerMessageId: attempt.providerMessageId });
     }
-    await tx.activity.create({ data: { type: "NOTE", subject: `Delivery reconciled: ${outcome}`, notes: evidence, fundraisingProspectId: id, product: "BRANDSPRK", date: new Date(), contactId: p.contactId, accountId: p.contact?.accountId } });
+    await tx.activity.create({ data: { type: "NOTE", subject: `Delivery reconciled: ${outcome}`, notes: evidence, fundraisingProspectId: id, product: fundraisingRound(p.roundKey).product, date: new Date(), contactId: p.contactId, accountId: p.contact?.accountId } });
     return tx.fundraisingDispatch.update({ where: { id: dispatchId }, data: { state: outcome === "SENT" ? "SENT" : "NOT_SENT" } });
   });
 }
