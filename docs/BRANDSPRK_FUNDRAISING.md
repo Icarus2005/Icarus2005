@@ -1,8 +1,15 @@
 # BrandSprk fundraising workflow
 
-The fundraising workspace at `/fundraising` manages the BrandSprk-only $300,000 pre-seed round. Commercial validation remains early. Valuation cap, issuing entity and IP scope need confirmation before quoting terms.
+The fundraising workspace at `/fundraising` manages two separate pre-seed rounds: BrandSprk ($300,000) and PlacePulse ($1,500,000). Select the venture tab before inspecting, importing or editing any routes. Each round has independent prospect records, capital totals, tasks and activity product labels; both reuse the existing protected CRM. Commercial validation remains early. Valuation cap, issuing entity and IP scope need confirmation before quoting terms. This document originally described BrandSprk only; existing BrandSprk imports and records remain unchanged.
 
 ## Operation
+
+BrandSprk investor briefing: https://www.brandsprk.io/invest
+PlacePulse investor briefing: https://www.placepulse.io/invest
+
+PlacePulse imports must use a JSON object with `roundKey: "placepulse-preseed-2026"` and `rows: [...]`. Older BrandSprk imports can retain their existing array or `{ "rows": [...] }` format. The UI rejects a mismatched round marker; only approved known round keys are accepted by the API. Do not simply switch the tab and upload a BrandSprk tracker into PlacePulse.
+
+The UI can insert the correct investor-briefing link into the selected message for review. The sender blocks a new Zoho initial email to a contact with verified or unresolved outreach under the other venture; use the existing conversation externally and record a verified event if appropriate. This protection serializes concurrent claims by normalized recipient email. Never treat an imported historical submission as an actual send.
 
 1. Choose the private JSON tracker export under **Import private funding tracker**. Review the preview and import. The unique round/source ID prevents repeat imports from duplicating routes. Existing records and human edits are skipped, never overwritten.
 2. Select a route. Link an existing verified CRM contact, or create one using the existing contact flow. Imports deliberately do not guess people, emails, companies or contact matches.
