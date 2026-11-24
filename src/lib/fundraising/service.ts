@@ -152,7 +152,7 @@ export async function sendFundraisingEmail(id: string, input: Record<string, unk
     // Serialize claim checks by recipient email even when two different venture
     // routes are sending concurrently. This must happen within the claim transaction.
     // PG advisory transaction locks automatically release on COMMIT or ROLLBACK.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${to})::bigint)`;
+    await tx.$queryRaw`SELECT 1::integer AS locked FROM pg_advisory_xact_lock(hashtext(${to})::bigint)`;
     // Same investor email may be represented by different CRM contacts across ventures.
     // Do not silently pitch a second venture when a verified first outreach exists.
     // The operator may use the existing thread outside this sender and log its actual outcome.
