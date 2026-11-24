@@ -2,18 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEmailProvider } from "@/lib/email/zoho";
 import { FundraisingError, importProspects, logEvent, reconcileDelivery, sendFundraisingEmail, updateProspect } from "@/lib/fundraising/service";
-import { ROUND_KEY, TARGET_USD } from "@/lib/fundraising/rules";
+import { FUNDRAISING_ROUNDS, ROUND_KEY, ROUND_KEYS, parseRoundKey } from "@/lib/fundraising/rules";
 
 export const dynamic = "force-dynamic";
-export async function GET() {
+export async function GET(req: NextRequest) {
+  let roundKey: ReturnType<typeof parseRoundKey>;
+  try { roundKey = parseRoundKey(req.nextUrl.searchParams.get("roundKey") || ROUND_KEY); }
+  catch { return NextResponse.json({ error: "Unknown fundraising round." }, { status: 400 }); }
   try {
-    const prospects = await prisma.fundraisingProspect.findMany({ where: { roundKey: ROUND_KEY }, orderBy: { sourceKey: "asc" }, include: {
+    const prospects = await prisma.fundraisingProspect.findMany({ where: { roundKey }, orderBy: { sourceKey: "asc" }, include: {
       contact: { select: { id: true, firstName: true, lastName: true, email: true } },
       tasks: { where: { status: "OPEN" }, orderBy: { dueDate: "asc" } },
       activities: { orderBy: { date: "desc" }, take: 20 },
       dispatches: { where: { state: { in: ["SENDING", "UNCERTAIN"] } }, select: { id: true, state: true, createdAt: true } },
     } });
-    return NextResponse.json({ prospects, targetUsd: TARGET_USD, zohoConfigured: !!getEmailProvider() }, { headers: { "Cache-Control": "no-store" } });
+    // Flag cross-venture duplicate outreach before an operator approves a new email.
+    // Server-side send validation independently enforces this boundary.
+    const otherSent = await prisma.fundraisingProspect.findMany({
+      where: { roundKey: { in: ROUND_KEYS.filter(key => key !== roundKey) }, firstSentAt: { not: null }, contactId: { not: null } },
+      select: { contact: { select: { email: true } } },
+    });
+    const crossVentureContactEmails = [...new Set(otherSent.flatMap(p => p.contact?.email ? [p.contact.email.toLowerCase()] : []))];
+    return NextResponse.json({
+      prospects, roundKey,
+      targetUsd: FUNDRAISING_ROUNDS[roundKey].targetUsd,
+      briefingUrl: FUNDRAISING_ROUNDS[roundKey].briefingUrl,
+      crossVentureContactEmails,
+      zohoConfigured: !!getEmailProvider(),
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch { return NextResponse.json({ error: "Fundraising unavailable. Confirm its database migration has been applied." }, { status: 503 }); }
 }
 
@@ -27,10 +43,10 @@ export async function POST(req: NextRequest) {
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
   } catch { return NextResponse.json({ error: "Invalid JSON object." }, { status: 400 }); }
   try {
-    if (body.action === "IMPORT_PREVIEW") return NextResponse.json({ rows: await importProspects(body.rows, true) });
+    if (body.action === "IMPORT_PREVIEW") return NextResponse.json({ rows: await importProspects(body.rows, true, parseRoundKey(body.roundKey ?? ROUND_KEY)) });
     if (body.action === "IMPORT") {
       if (body.reviewed !== true) throw new FundraisingError("Review the import preview first.");
-      return NextResponse.json(await importProspects(body.rows, false));
+      return NextResponse.json(await importProspects(body.rows, false, parseRoundKey(body.roundKey ?? ROUND_KEY)));
     }
     if (typeof body.id !== "string") throw new FundraisingError("Route ID is required.");
     if (body.action === "SAVE") return NextResponse.json(await updateProspect(body.id, body));
