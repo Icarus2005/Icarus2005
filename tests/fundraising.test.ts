@@ -83,6 +83,36 @@ describe("fundraising workflow against disposable Postgres", { skip: !safeDb }, 
     assert.ok(tasks.every(t => t.product === "PLACEPULSE"));
   });
 
+  test("concurrent sends across the two ventures cannot reach Zoho twice", async () => {
+    const brand = await make(true);
+    const r = row();
+    await importProspects([r], false, "placepulse-preseed-2026");
+    const place = await prisma.fundraisingProspect.findFirstOrThrow({
+      where: { roundKey: "placepulse-preseed-2026", sourceKey: r.sourceKey },
+    });
+    ids.push(place.id);
+    await prisma.fundraisingProspect.update({ where: { id: place.id }, data: { contactId: brand.contact!.id } });
+    let notifyProviderStarted: () => void = () => {};
+    let finishProvider: () => void = () => {};
+    const providerStarted = new Promise<void>(resolve => { notifyProviderStarted = resolve; });
+    const releaseProvider = new Promise<void>(resolve => { finishProvider = resolve; });
+    const provider = fake(async () => { notifyProviderStarted(); await releaseProvider; });
+    const firstSend = sendFundraisingEmail(brand.id, send(brand.contact!.email!), provider);
+    // The first claim is committed and the provider call is intentionally held.
+    await providerStarted;
+    try {
+      await assert.rejects(
+        sendFundraisingEmail(place.id, send(brand.contact!.email!), provider),
+        /other venture/,
+      );
+      assert.equal(provider.calls, 1);
+    } finally {
+      finishProvider();
+      await firstSend;
+    }
+    assert.equal(provider.calls, 1);
+  });
+
   test("the Zoho sender blocks duplicate cross-venture initial outreach to the same email", async () => {
     const prior = await make(true);
     await logEvent(prior.id, event());
