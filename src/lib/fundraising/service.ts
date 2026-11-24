@@ -149,6 +149,10 @@ export async function sendFundraisingEmail(id: string, input: Record<string, unk
     }
     if (p.sourceStatus === "Submitted previously") throw new FundraisingError("Use the original submission thread in Zoho, then record the confirmed send.");
     if (!p.contact?.email || p.contact.email.toLowerCase() !== to) throw new FundraisingError("Recipient must match the linked CRM contact email.");
+    // Serialize claim checks by recipient email even when two different venture
+    // routes are sending concurrently. This must happen within the claim transaction.
+    // PG advisory transaction locks automatically release on COMMIT or ROLLBACK.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${to})::bigint)`;
     // Same investor email may be represented by different CRM contacts across ventures.
     // Do not silently pitch a second venture when a verified first outreach exists.
     // The operator may use the existing thread outside this sender and log its actual outcome.
@@ -161,8 +165,20 @@ export async function sendFundraisingEmail(id: string, input: Record<string, unk
       },
       select: { id: true },
     });
-    if (otherVentureSend) throw new FundraisingError(
-      "This investor has recorded outreach for the other venture. Review that conversation before any new email. Use the existing thread and record the actual event manually.",
+    const otherVenturePending = await tx.fundraisingDispatch.findFirst({
+      where: {
+        state: { in: ["SENDING", "UNCERTAIN"] },
+        prospect: {
+          is: {
+            roundKey: { in: ROUND_KEYS.filter(key => key !== p.roundKey) },
+            contact: { is: { email: { equals: to, mode: "insensitive" } } },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    if (otherVentureSend || otherVenturePending) throw new FundraisingError(
+      "This investor has recorded or pending outreach for the other venture. Review that conversation before any new email. Use the existing thread and record the actual event manually.",
       409,
     );
     await validateSend(tx, p, kind);
