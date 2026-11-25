@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Request too large." }, { status: 413, headers: NO_STORE });
   }
   let raw = "";
+  const chunks: Buffer[] = [];
   const reader = request.body?.getReader();
   if (!reader) return NextResponse.json({ error: "Request body required." }, { status: 400, headers: NO_STORE });
   let bytes = 0;
@@ -36,11 +37,14 @@ export async function POST(request: NextRequest) {
         await reader.cancel().catch(() => {});
         return NextResponse.json({ error: "Request too large." }, { status: 413, headers: NO_STORE });
       }
-      raw += Buffer.from(value).toString("utf8");
+      chunks.push(Buffer.from(value));
     }
   } catch {
     return NextResponse.json({ error: "Invalid body." }, { status: 400, headers: NO_STORE });
   }
+  // Decode once after reading all bounded chunks. This preserves UTF-8
+  // boundaries and the exact byte stream used for the HMAC signature.
+  raw = Buffer.concat(chunks).toString("utf8");
 
   if (!verifyInvestorWebhook({
     secret: process.env.CRM_INBOUND_INVESTOR_HMAC_SECRET,
