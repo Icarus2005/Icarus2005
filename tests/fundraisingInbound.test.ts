@@ -43,7 +43,7 @@ test("HMAC is time-bounded, byte-exact, and fails closed when disabled", () => {
   const args = { secret: SECRET, timestamp, signature, rawBody, nowSeconds: time };
   assert.equal(verifyInvestorWebhook(args), true);
   assert.equal(verifyInvestorWebhook({ ...args, rawBody: rawBody + " " }), false);
-  assert.equal(verifyInvestorWebhook({ ...args, signature: signature.slice(0, -2) + "ff" }), false);
+  assert.equal(verifyInvestorWebhook({ ...args, signature: signature.slice(0, -1) + (signature.endsWith("0") ? "1" : "0") }), false);
   assert.equal(verifyInvestorWebhook({ ...args, secret: undefined }), false);
   assert.equal(verifyInvestorWebhook({ ...args, secret: "too-short" }), false);
   assert.equal(verifyInvestorWebhook({ ...args, nowSeconds: time + 301 }), false);
