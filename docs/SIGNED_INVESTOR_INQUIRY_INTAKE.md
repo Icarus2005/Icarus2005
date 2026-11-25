@@ -13,12 +13,13 @@ The global Basic Auth gate has a narrow exception for this path; authorization i
 Required production environment:
 
 - `CRM_INBOUND_INVESTOR_ENABLED=true` (disabled unless set precisely)
-- `CRM_INBOUND_INVESTOR_HMAC_SECRET` (random private value, 32+ characters)
+- `CRM_INBOUND_INVESTOR_BRANDSPRK_SECRET / CRM_INBOUND_INVESTOR_PLACEPULSE_SECRET` (random private value, 32+ characters)
 
-On each **originating site's server**, privately configure the same secret. Never put it in public JavaScript, client configuration, query strings, or GitHub. A server-side route must sign and forward only a validated, human-initiated, consented form request.
+On each **originating site's server**, privately configure only its corresponding secret. Keys must differ; the CRM rejects accidental reuse. Never put it in public JavaScript, client configuration, query strings, or GitHub. A server-side route must sign and forward only a validated, human-initiated, consented form request.
 
 Headers:
 
+- `x-arqone-round`: exact venture round key, which must match the authenticated body.
 - `x-arqone-timestamp`: Unix seconds, limited to +/- 300 seconds
 - `x-arqone-signature`: lowercase hex HMAC-SHA256 of `<timestamp>.<exact UTF-8 JSON body>`
 
@@ -53,7 +54,7 @@ The submitted name, organization, unverified email and bounded message are store
 3. Add per-IP + per-email rate limiting, spam filtering and a honeypot or equivalent at each **originating** public website. The CRM authenticates source servers but not end-user identity.
 4. Implement public investor form UI separately in both websites with work email, organization, contact request, and explicit consent. PlacePulse's existing **pilot request** form must remain separate.
 5. Ensure each website's **server** submits the signed payload. Verify the correct matching venture, idempotency and evidence under an isolated non-production CRM database.
-6. Provision the shared secret in intended production environments and activate the receiver only after explicit deployment approval.
+6. Provision the distinct venture secrets in intended production environments and activate the receiver only after explicit deployment approval.
 7. Never copy real investor names, emails, secrets or submissions into the public GitHub repository or PR logs.
 8. Test live delivery with synthetic email and a verified 202 result, then verify route creation and no mail sent. Do not run a production demo using a real person's contact details without consent.
 
