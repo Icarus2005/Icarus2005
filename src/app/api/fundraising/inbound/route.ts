@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inquirySourceKey, parseInvestorInquiry, verifyInvestorWebhook } from "@/lib/fundraising/inboundAuth";
+import { fundraisingRound } from "@/lib/fundraising/rules";
 
 export const dynamic = "force-dynamic";
 const MAX_BYTES = 8192;
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
           `Contact consent version: ${input.consentVersion}`,
           "No outbound message has been sent.",
         ].join("\n"),
-        evidence: `Opt-in website form submission received ${now}; source: ${input.sourcePage}; event: ${input.eventId}`,
+        evidence: `Opt-in website form submission received ${now}; source: ${fundraisingRound(input.roundKey).briefingUrl}; event: ${input.eventId}`,
         source: "Direct investor inquiry",
         sourceStatus: "Unverified inbound form submission",
         drafts: [],
