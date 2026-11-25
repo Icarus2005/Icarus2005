@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { inquirySourceKey, parseInvestorInquiry, verifyInvestorWebhook } from "@/lib/fundraising/inboundAuth";
-import { fundraisingRound } from "@/lib/fundraising/rules";
+import { inquirySourceKey, parseInvestorInquiry, verifyInvestorWebhook, investorWebhookSecret } from "@/lib/fundraising/inboundAuth";
+import { fundraisingRound, parseRoundKey } from "@/lib/fundraising/rules";
 
 export const dynamic = "force-dynamic";
 const MAX_BYTES = 8192;
@@ -14,16 +14,19 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * There are no public reads, automatic sends, contacts, commitments or tasks.
  */
 export async function POST(request: NextRequest) {
-  if (process.env.CRM_INBOUND_INVESTOR_ENABLED !== "true" ||
-      !process.env.CRM_INBOUND_INVESTOR_HMAC_SECRET ||
-      process.env.CRM_INBOUND_INVESTOR_HMAC_SECRET.length < 32) {
+  if (process.env.CRM_INBOUND_INVESTOR_ENABLED !== "true") {
     return NextResponse.json({ error: "Investor inquiry integration unavailable." }, { status: 503, headers: NO_STORE });
   }
+
+  let roundKey: ReturnType<typeof parseRoundKey>;
+  try { roundKey = parseRoundKey(request.headers.get("x-arqone-round")); }
+  catch { return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers: NO_STORE }); }
+  const secret = investorWebhookSecret(roundKey, process.env);
+  if (!secret) return NextResponse.json({ error: "Investor inquiry integration unavailable." }, { status: 503, headers: NO_STORE });
 
   if (Number(request.headers.get("content-length") || "0") > MAX_BYTES) {
     return NextResponse.json({ error: "Request too large." }, { status: 413, headers: NO_STORE });
   }
-  let raw = "";
   const chunks: Buffer[] = [];
   const reader = request.body?.getReader();
   if (!reader) return NextResponse.json({ error: "Request body required." }, { status: 400, headers: NO_STORE });
@@ -45,10 +48,10 @@ export async function POST(request: NextRequest) {
   }
   // Decode once after reading all bounded chunks. This preserves UTF-8
   // boundaries and the exact byte stream used for the HMAC signature.
-  raw = Buffer.concat(chunks).toString("utf8");
+  const raw = Buffer.concat(chunks);
 
   if (!verifyInvestorWebhook({
-    secret: process.env.CRM_INBOUND_INVESTOR_HMAC_SECRET,
+    secret,
     timestamp: request.headers.get("x-arqone-timestamp"),
     signature: request.headers.get("x-arqone-signature"),
     rawBody: raw,
@@ -56,8 +59,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers: NO_STORE });
   }
 
+  let input: ReturnType<typeof parseInvestorInquiry>;
   try {
-    const input = parseInvestorInquiry(JSON.parse(raw));
+    input = parseInvestorInquiry(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)));
+    if (input.roundKey !== roundKey) throw new Error("Round mismatch");
+  } catch {
+    return NextResponse.json({ error: "Invalid investor inquiry." }, { status: 400, headers: NO_STORE });
+  }
+  try {
     const sourceKey = inquirySourceKey(input);
     const now = new Date().toISOString();
     // This is an unverified inbound contact request, not a send, reply, payment,
@@ -87,10 +96,7 @@ export async function POST(request: NextRequest) {
       skipDuplicates: true,
     });
     return NextResponse.json({ accepted: true }, { status: 202, headers: NO_STORE });
-  } catch (error) {
-    if (error instanceof SyntaxError || (error instanceof Error && (error.message.startsWith("Invalid") || error.message.includes("consent")))) {
-      return NextResponse.json({ error: "Invalid investor inquiry." }, { status: 400, headers: NO_STORE });
-    }
+  } catch {
     // Never expose DB errors, contact data or inbound messages to public callers.
     return NextResponse.json({ error: "Investor inquiry could not be recorded." }, { status: 503, headers: NO_STORE });
   }
