@@ -54,7 +54,7 @@ export default function FundraisingPage() {
     setCrossVentureContactEmails(data.crossVentureContactEmails ?? []);
   }, [roundKey]);
   useEffect(() => { reload().catch(e => setError(e.message)); }, [reload]);
-   const todayDubai = dubaiDay(new Date());
+  const todayDubai = dubaiDay(new Date());
   const openFollowups = (p: Prospect) => p.tasks.filter(t => t.id === `fundraise_${p.id}_1` || t.id === `fundraise_${p.id}_2`);
   const due = (p: Prospect) => openFollowups(p).some(t => t.dueDate && dubaiDay(t.dueDate) <= todayDubai);
   const actionable = (p: Prospect) => p.priority !== "Hold" && !["PAUSED", "REJECTED", "HOLD", "COMMITTED"].includes(p.status) && (due(p) || ["NOT_STARTED", "SUBMITTED_PREVIOUSLY", "NEEDS_QUALIFICATION"].includes(p.status));
@@ -222,7 +222,7 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
     finally { setBusy(false); }
   }
   function save() {
-    const drafts: Draft[] = form.drafts.length ? form.drafts.map((d,i) => i === draftIndex ? { ...d, subject, body } : d) : [{ id: "MANUAL", subject, body, channel, condition: "Review before sending." }];
+    const drafts: Draft[] = form.drafts.length ? form.drafts.map((d,i) => i === draftIndex ? { ...d, subject, body } : d) : body.trim() ? [{ id: "MANUAL", subject, body, channel, condition: "Review before sending." }] : [];
     void run("SAVE", { ...form, drafts, committedUsd: Number(form.committedUsd), receivedUsd: Number(form.receivedUsd) });
   }
   const eventAt = () => new Date(`${at}:00+04:00`).toISOString();
@@ -232,10 +232,10 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
   const completeDraft = !!subject.trim() && !!body.trim();
   const dirty = JSON.stringify(form) !== JSON.stringify(p) || subject !== (p.drafts[draftIndex]?.subject ?? `${FUNDRAISING_ROUNDS[p.roundKey].label} pre-seed`) || body !== (p.drafts[draftIndex]?.body ?? "");
   const manualBlocked = busy || !!p.dispatches.length || routeChangesPending || !completeDraft;
-  function copyLinkedIn() {
+  function copyFor(destination: "LINKEDIN" | "EMAIL") {
     void navigator.clipboard.writeText(body).then(() => {
-      setChannel("LINKEDIN"); setManualOpen(true); resetApproval();
-      setMessage("Message copied. Send it on LinkedIn, then record the actual send below.");
+      setChannel(destination); setManualOpen(true); resetApproval();
+      setMessage(destination === "LINKEDIN" ? "Message copied. Send it on LinkedIn, then record the actual send below." : "Message copied. Send using your verified email route, then record the actual send below.");
     }).catch(() => setMessage("Clipboard unavailable. Select and copy the message."));
   }
   function useBetaDraft() {
@@ -257,7 +257,7 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
       <p className="mt-1 text-sm">{p.nextAction}</p>
       {(p.status === "SUBMITTED_PREVIOUSLY" || p.sourceStatus === "Submitted previously") && <p className="mt-2 text-xs text-gray-600">Historical submission only; no confirmed outreach timestamp. Keep that history, and verify the recipient or original thread before contacting.</p>}
     </div>
-    {p.dispatches.length > 0 && <div className="space-y-3 rounded border border-amber-300 bg-amber-50 p-3"><h3 className="font-medium">Unresolved delivery</h3><p className="text-sm">Check Zoho Sent. Do not retry the message. After ten minutes, record the verified outcome and evidence.</p><textarea aria-label="Delivery verification evidence" className={inputClass} value={reconcileNote} onChange={e => setReconcileNote(e.target.value)} />{p.dispatches.map(d => <div key={d.id} className="space-x-3 text-sm"><p>{d.state} · {date(d.createdAt)}</p>{["SENT","NOT_SENT"].map(outcome => <button key={outcome} className="my-2 rounded border bg-white px-3 py-2" disabled={busy || !reconcileNote.trim()} onClick={() => run("RECONCILE", { dispatchId:d.id, outcome, evidence:reconcileNote, at:eventAt() })}>Verified {outcome.replaceAll("_"," ").toLowerCase()}</button>)}</div>)}</div>}
+    {p.dispatches.length > 0 && <div className="space-y-3 rounded border border-amber-300 bg-amber-50 p-3"><h3 className="font-medium">Unresolved delivery</h3><p className="text-sm">Check Zoho Sent. Do not retry the message. After ten minutes, record the verified outcome and evidence.</p><textarea aria-label="Delivery verification evidence" className={inputClass} value={reconcileNote} onChange={e => setReconcileNote(e.target.value)} />{p.dispatches.map(d => <div key={d.id} className="space-x-3 text-sm"><p>{d.state} · {date(d.createdAt)}</p>{["SENT","NOT_SENT"].map(outcome => <button key={outcome} className="my-2 rounded border bg-white px-3 py-2" disabled={busy || !reconcileNote.trim() || !at} onClick={() => run("RECONCILE", { dispatchId:d.id, outcome, evidence:reconcileNote, at:eventAt() })}>Verified {outcome.replaceAll("_"," ").toLowerCase()}</button>)}</div>)}</div>}
     <div className="border-t pt-4"><h3 className="font-medium">Review outreach message</h3>
       {form.drafts.length > 0 && <select aria-label="Choose draft" className={`${inputClass} my-2`} value={draftIndex} onChange={e => selectDraft(Number(e.target.value))}>{form.drafts.map((d,i) => <option key={d.id} value={i}>{d.id} · {d.channel} · {d.subject}</option>)}</select>}
       <p className="mb-2 text-sm text-amber-800">Sending condition: {condition}</p>
@@ -265,13 +265,13 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
       <label className="mt-2 block text-sm">Message<textarea className={inputClass} rows={9} value={body} onChange={e => {setBody(e.target.value);resetApproval();}} /></label>
       <p className="text-xs text-gray-500">{body.length} characters. For LinkedIn, use the limit shown in your connection box.</p>
       <div className="mt-3 flex flex-wrap gap-3">
-        <button type="button" className="rounded border px-3 py-2 text-sm" disabled={busy} onClick={useBetaDraft}>Use beta introduction</button>
+        {kind === "INITIAL" && <button type="button" className="rounded border px-3 py-2 text-sm" disabled={busy} onClick={useBetaDraft}>Use beta introduction</button>}
         <button type="button" className="rounded border border-brand-600 px-3 py-2 text-sm text-brand-700" onClick={() => { if (!body.includes(briefingUrl)) setBody(text => `${text.trim()}\n\nInvestor briefing: ${briefingUrl}`); resetApproval(); }}>Insert correct investor briefing</button>
-        <button className={buttonClass} disabled={busy || !subject.trim() || !body.trim()} onClick={save}>Save route and draft</button><button type="button" className="rounded border px-3 py-2 text-sm font-medium" disabled={busy || !completeDraft} onClick={copyLinkedIn}>Copy for LinkedIn</button></div>
+        <button className={buttonClass} disabled={busy || !subject.trim() || !body.trim()} onClick={save}>Save route and draft</button><button type="button" className="rounded border px-3 py-2 text-sm font-medium" disabled={busy || !completeDraft} onClick={() => copyFor("LINKEDIN")}>Copy for LinkedIn</button><button type="button" className="rounded border px-3 py-2 text-sm" disabled={busy || !completeDraft} onClick={() => copyFor("EMAIL")}>Copy for email</button></div>
     </div>
     <div className="space-y-3 border-t pt-4">
       <h3 className="font-medium">Send or record outreach</h3>
-      <p className="text-sm">Zoho recipient: {p.contact?.email || "No verified contact linked"}</p>
+      <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Zoho recipient: {p.contact?.email || "No verified contact linked"}</p><button type="button" className="text-sm text-brand-700 underline" disabled={busy} onClick={() => { setAdvancedOpen(true); document.getElementById("investor-relationship-details")?.scrollIntoView({ block: "start" }); }}> {p.contact?.email ? "Edit linked contact" : "Link verified contact"}</button></div>
       <select aria-label="Send sequence step" className={inputClass} value={kind} onChange={e => {setKind(e.target.value);resetApproval();}}>{SEND_KINDS.map(s => <option key={s}>{s}</option>)}</select>
       <label className="block text-sm"><input type="checkbox" checked={conditions} onChange={e => {setConditions(e.target.checked);setApproved(false);setSentConfirmed(false);}} /> I checked the recipient, sending condition and existing conversation.</label>
       {sendBlock ? <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{sendBlock}</p> : <>
@@ -288,7 +288,7 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
         </div>
       </details>
     </div>
-    <details className="rounded border p-3" open={advancedOpen} onToggle={e => setAdvancedOpen(e.currentTarget.open)}>
+    <details id="investor-relationship-details" className="rounded border p-3 scroll-mt-4" open={advancedOpen} onToggle={e => setAdvancedOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer font-medium text-sm">Relationship, contact and capital details</summary>
       <div className="mt-4 space-y-4">
     <p className="text-xs text-gray-500">Source: {p.source} · {p.sourceStatus}. Original evidence: {p.evidence}</p>
@@ -305,14 +305,15 @@ function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVen
     <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Confirmed commitments (USD)<input className={inputClass} type="number" min="0" step="0.01" value={form.committedUsd} onChange={e => change("committedUsd",e.target.value)} /></label><label className="text-sm">Cash received (USD)<input className={inputClass} type="number" min="0" step="0.01" value={form.receivedUsd} onChange={e => change("receivedUsd",e.target.value)} /></label></div>
     <label className="block text-sm">Capital confirmation evidence<textarea className={inputClass} placeholder="Dated confirmation / signed documents / receipt reference" value={form.capitalEvidence} onChange={e => change("capitalEvidence",e.target.value)} /></label>
 
-        <button className={buttonClass} disabled={busy || !completeDraft} onClick={save}>Save relationship and draft</button>
-        {!completeDraft && <p className="text-xs text-gray-600">Enter a subject and message before saving this route.</p>}
+        <button className={buttonClass} disabled={busy || (!completeDraft && (form.drafts.length > 0 || !!body.trim()))} onClick={save}>Save relationship details</button>
+        {!completeDraft && (form.drafts.length > 0 || !!body.trim()) && <p className="text-xs text-gray-600">Complete the current draft before saving changes.</p>}
       </div>
     </details>
     <details className="rounded border p-3">
       <summary className="cursor-pointer font-medium text-sm">Replies, rejection and pause</summary>
       <div className="mt-3 space-y-3">
-        <p className="text-xs text-gray-500">First sent: {date(p.firstSentAt)}. Last sent: {date(p.lastSentAt)}. Uses the actual event time and channel in the recording panel above.</p>
+        <p className="text-xs text-gray-500">First sent: {date(p.firstSentAt)}. Last sent: {date(p.lastSentAt)}.</p>
+        <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Actual event time (Dubai)<input className={inputClass} type="datetime-local" value={at} onChange={e => {setAt(e.target.value);setSentConfirmed(false);}} /></label><label className="text-sm">Channel<select className={inputClass} value={channel} onChange={e => {setChannel(e.target.value);setSentConfirmed(false);}}>{["EMAIL","LINKEDIN","WHATSAPP","CALL","MEETING","NOTE"].map(s => <option key={s}>{s}</option>)}</select></label></div>
         <label className="block text-sm">Reply / rejection / pause evidence<textarea className={inputClass} value={eventNote} onChange={e => setEventNote(e.target.value)} placeholder="What happened and why?" /></label>
         <div className="flex flex-wrap gap-3">{[["REPLY","Record reply"],["REJECT","Record rejection"],["PAUSE","Pause outreach"]].map(([action,label]) => <button key={action} className="rounded border px-3 py-2 text-sm disabled:opacity-40" disabled={busy || !eventNote.trim() || !at} onClick={() => run(action, { key: crypto.randomUUID(), subject: `${label}: ${p.name}`, body: eventNote, channel, at: eventAt() })}>{label}</button>)}</div>
       </div>
