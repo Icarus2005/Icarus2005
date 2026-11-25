@@ -5,6 +5,16 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EVENT_ID_PATTERN = /^[a-zA-Z0-9_-]{12,80}$/;
 const MAX_CLOCK_SKEW_SECONDS = 300;
 
+/** Each public venture has an independent signing key. */
+export function investorWebhookSecret(roundKey: RoundKey, env: Record<string, string | undefined>): string | undefined {
+  const brand = env.CRM_INBOUND_INVESTOR_BRANDSPRK_SECRET;
+  const place = env.CRM_INBOUND_INVESTOR_PLACEPULSE_SECRET;
+  // Fail closed if deployment accidentally reuses one signing key for both sites.
+  if (brand && place && brand === place) return undefined;
+  const selected = roundKey === "brandsprk-preseed-2026" ? brand : place;
+  return selected && selected.length >= 32 ? selected : undefined;
+}
+
 export type InvestorInquiry = {
   eventId: string;
   roundKey: RoundKey;
@@ -35,7 +45,7 @@ export function parseInvestorInquiry(value: unknown): InvestorInquiry {
   const email = bounded(body.email, "email", 254).toLowerCase();
   if (!EMAIL_PATTERN.test(email)) throw new Error("Invalid email.");
   const sourcePage = bounded(body.sourcePage, "source page", 250);
-  if (new URL(sourcePage).origin + new URL(sourcePage).pathname !== fundraisingRound(roundKey).briefingUrl) {
+  if (sourcePage !== fundraisingRound(roundKey).briefingUrl) {
     throw new Error("Investor inquiry source does not match venture.");
   }
   const consentVersion = bounded(body.consentVersion, "consent version", 40);
@@ -57,14 +67,14 @@ export function verifyInvestorWebhook(input: {
   secret: string | undefined;
   timestamp: string | null;
   signature: string | null;
-  rawBody: string;
+  rawBody: string | Buffer;
   nowSeconds?: number;
 }): boolean {
   const { secret, timestamp, signature, rawBody, nowSeconds = Math.floor(Date.now() / 1000) } = input;
   if (!secret || secret.length < 32 || !timestamp || !/^\d{10}$/.test(timestamp) || !signature || !/^[a-f0-9]{64}$/i.test(signature)) return false;
   const seconds = Number(timestamp);
   if (!Number.isSafeInteger(seconds) || Math.abs(nowSeconds - seconds) > MAX_CLOCK_SKEW_SECONDS) return false;
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest();
+  const expected = createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest();
   const received = Buffer.from(signature, "hex");
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
