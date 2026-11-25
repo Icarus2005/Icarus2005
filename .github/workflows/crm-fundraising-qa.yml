@@ -86,8 +86,11 @@ jobs:
       - name: Check ESLint
         run: npx eslint src tests --ext .ts,.tsx --max-warnings=0
 
-      - name: Run full database-backed test suite
-        run: npm test
+      # These files share a single disposable PostgreSQL database. Parallel file
+      # execution can alter global counts in unrelated tests and hide a genuine
+      # regression. Run files serially, while retaining all 248 DB-backed cases.
+      - name: Run full database-backed test suite (serial files)
+        run: node --import tsx --test --test-concurrency=1 tests/*.test.ts
 
       - name: Build production application
         run: npm run build
