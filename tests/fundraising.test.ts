@@ -2,7 +2,7 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
-import { actualDate, followupDate, money, parseImport } from "../src/lib/fundraising/rules";
+import { actualDate, followupDate, money, parseImport, parseRoundKey, fundraisingRound } from "../src/lib/fundraising/rules";
 import { importProspects, logEvent, reconcileDelivery, sendFundraisingEmail, updateProspect } from "../src/lib/fundraising/service";
 import type { EmailProvider } from "../src/lib/email/provider";
 
@@ -20,6 +20,15 @@ test("imports cannot invent sends, investments, or duplicate source rows", () =>
   assert.throws(() => money(-1)); assert.throws(() => money("300")); assert.throws(() => money(0.001));
   assert.throws(() => actualDate("2026-11-17T10:00"));
   assert.throws(() => actualDate("2099-01-01T00:00:00Z"));
+});
+
+test("the two venture rounds have independent targets, products and briefing links", () => {
+  assert.equal(fundraisingRound("brandsprk-preseed-2026").targetUsd, 300000);
+  assert.equal(fundraisingRound("placepulse-preseed-2026").targetUsd, 1500000);
+  assert.equal(fundraisingRound("placepulse-preseed-2026").product, "PLACEPULSE");
+  assert.equal(fundraisingRound("brandsprk-preseed-2026").briefingUrl, "https://www.brandsprk.io/invest");
+  assert.equal(fundraisingRound("placepulse-preseed-2026").briefingUrl, "https://www.placepulse.io/invest");
+  assert.throws(() => parseRoundKey("unknown-venture"), /fundraising round/);
 });
 
 // Explicitly local, disposable Postgres only. Providers are always fakes.
@@ -49,6 +58,84 @@ describe("fundraising workflow against disposable Postgres", { skip: !safeDb }, 
     await prisma.account.deleteMany({ where: { id: { in:accountIds } } });
     await prisma.$disconnect();
   });
+  test("same source key can exist independently in BrandSprk and PlacePulse", async () => {
+    const r = row();
+    await importProspects([r], false);
+    await importProspects([r], false, "placepulse-preseed-2026");
+    const routes = await prisma.fundraisingProspect.findMany({ where: { sourceKey: r.sourceKey } });
+    routes.forEach(p => ids.push(p.id));
+    assert.equal(routes.length, 2);
+    assert.deepEqual(new Set(routes.map(p => p.roundKey)), new Set(["brandsprk-preseed-2026", "placepulse-preseed-2026"]));
+    await prisma.fundraisingProspect.update({ where: { id: routes[0].id }, data: { notes: "Edited once" } });
+    assert.equal((await prisma.fundraisingProspect.findUniqueOrThrow({ where: { id: routes[1].id } })).notes, r.notes);
+  });
+
+  test("PlacePulse confirmed send creates PlacePulse activity and task records", async () => {
+    const r = row();
+    await importProspects([r], false, "placepulse-preseed-2026");
+    const p = await prisma.fundraisingProspect.findFirstOrThrow({ where: { roundKey: "placepulse-preseed-2026", sourceKey: r.sourceKey } });
+    ids.push(p.id);
+    await logEvent(p.id, event());
+    const activity = await prisma.activity.findFirstOrThrow({ where: { fundraisingProspectId: p.id } });
+    const tasks = await prisma.task.findMany({ where: { fundraisingProspectId: p.id } });
+    assert.equal(activity.product, "PLACEPULSE");
+    assert.equal(tasks.length, 2);
+    assert.ok(tasks.every(t => t.product === "PLACEPULSE"));
+  });
+
+  test("concurrent sends across the two ventures cannot reach Zoho twice", async () => {
+    const brand = await make(true);
+    const r = row();
+    await importProspects([r], false, "placepulse-preseed-2026");
+    const place = await prisma.fundraisingProspect.findFirstOrThrow({
+      where: { roundKey: "placepulse-preseed-2026", sourceKey: r.sourceKey },
+    });
+    ids.push(place.id);
+    await prisma.fundraisingProspect.update({ where: { id: place.id }, data: { contactId: brand.contact!.id } });
+    let notifyProviderStarted: () => void = () => {};
+    let finishProvider: () => void = () => {};
+    const providerStarted = new Promise<void>(resolve => { notifyProviderStarted = resolve; });
+    const releaseProvider = new Promise<void>(resolve => { finishProvider = resolve; });
+    const provider = fake(async () => { notifyProviderStarted(); await releaseProvider; });
+    const firstSend = sendFundraisingEmail(brand.id, send(brand.contact!.email!), provider);
+    // The first claim is committed and the provider call is intentionally held.
+    // Fail quickly if claim validation aborts before reaching the provider.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        providerStarted,
+        firstSend.then(() => { throw new Error("Send finished without provider start."); }),
+        new Promise<void>((_, reject) => { timer = setTimeout(() => reject(new Error("Timed out before first provider call.")), 5000); }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    try {
+      await assert.rejects(
+        sendFundraisingEmail(place.id, send(brand.contact!.email!), provider),
+        /other venture/,
+      );
+      assert.equal(provider.calls, 1);
+    } finally {
+      finishProvider();
+      await firstSend;
+    }
+    assert.equal(provider.calls, 1);
+  });
+
+  test("the Zoho sender blocks duplicate cross-venture initial outreach to the same email", async () => {
+    const prior = await make(true);
+    await logEvent(prior.id, event());
+    const r = row();
+    await importProspects([r], false, "placepulse-preseed-2026");
+    const place = await prisma.fundraisingProspect.findFirstOrThrow({ where: { roundKey: "placepulse-preseed-2026", sourceKey: r.sourceKey } });
+    ids.push(place.id);
+    await prisma.fundraisingProspect.update({ where: { id: place.id }, data: { contactId: prior.contact!.id } });
+    const provider = fake();
+    await assert.rejects(sendFundraisingEmail(place.id, send(prior.contact!.email!), provider), /other venture/);
+    assert.equal(provider.calls, 0);
+  });
+
   test("preview writes nothing; repeated imports preserve edits and create no tasks or activities", async () => {
     const r = row(); const before = await prisma.fundraisingProspect.count();
     const preview = await importProspects([r], true); assert.ok(Array.isArray(preview));

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Draft, ImportRow, PRIORITIES, SEND_KINDS, STATUSES } from "@/lib/fundraising/rules";
+import { Draft, ImportRow, PRIORITIES, ROUND_KEY, ROUND_KEYS, FUNDRAISING_ROUNDS, RoundKey, SEND_KINDS, STATUSES } from "@/lib/fundraising/rules";
 
 type Prospect = ImportRow & {
-  id: string; updatedAt: string; contactId: string | null; contact: { id: string; firstName: string; lastName: string; email: string | null } | null;
+  id: string; roundKey: RoundKey; updatedAt: string; contactId: string | null; contact: { id: string; firstName: string; lastName: string; email: string | null } | null;
   committedUsd: string; receivedUsd: string; capitalEvidence: string; firstSentAt: string | null; lastSentAt: string | null;
   tasks: { id: string; title: string; dueDate: string | null }[];
   activities: { id: string; subject: string; notes: string | null; date: string; type: string }[];
@@ -25,6 +25,8 @@ async function api(body: Record<string, unknown>) {
 
 export default function FundraisingPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [roundKey, setRoundKey] = useState<RoundKey>(ROUND_KEY);
+  const [crossVentureContactEmails, setCrossVentureContactEmails] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [configured, setConfigured] = useState(false);
   const [target, setTarget] = useState(300000);
@@ -36,11 +38,12 @@ export default function FundraisingPage() {
   const [preview, setPreview] = useState<(ImportRow & { operation: string })[] | null>(null);
   const [busy, setBusy] = useState(false);
   const reload = useCallback(async () => {
-    const response = await fetch("/api/fundraising", { cache: "no-store" });
+    const response = await fetch(`/api/fundraising?roundKey=${encodeURIComponent(roundKey)}`, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
     setProspects(data.prospects); setConfigured(data.zohoConfigured); setTarget(data.targetUsd);
-  }, []);
+    setCrossVentureContactEmails(data.crossVentureContactEmails ?? []);
+  }, [roundKey]);
   useEffect(() => { reload().catch(e => setError(e.message)); }, [reload]);
   const p = prospects.find(p => p.id === selected);
   const todayDubai = dubaiDay(new Date());
@@ -84,20 +87,36 @@ export default function FundraisingPage() {
     try {
       if (file.size > 2_000_000) throw new Error("Import exceeds 2 MB.");
       const input = JSON.parse(await file.text());
-      const result = await api({ action: "IMPORT_PREVIEW", rows: input.rows ?? input });
+      // Existing private BrandSprk imports have no round marker. New PlacePulse
+      // imports must explicitly declare their destination to avoid misfiling.
+      if (roundKey !== ROUND_KEY && input.roundKey !== roundKey) {
+        throw new Error("PlacePulse imports require roundKey: placepulse-preseed-2026 in the JSON file.");
+      }
+      if (input.roundKey && input.roundKey !== roundKey) throw new Error("Import belongs to a different fundraising venture.");
+      const result = await api({ action: "IMPORT_PREVIEW", roundKey, rows: input.rows ?? input });
       setRows(result.rows.map(({ operation: _operation, ...row }: ImportRow & { operation: string }) => row));
       setPreview(result.rows);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function commitImport() {
     setBusy(true); setError("");
-    try { await api({ action: "IMPORT", rows, reviewed: true }); setPreview(null); setRows(null); await reload(); }
+    try { await api({ action: "IMPORT", roundKey, rows, reviewed: true }); setPreview(null); setRows(null); await reload(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <div className="space-y-5 p-4 md:p-8">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-semibold">BrandSprk fundraising</h1><p className="text-sm text-gray-600">Pre-seed. Cap open for discussion. Pre-revenue / early validation.</p></div>
-      <Link className="text-sm text-brand-700 underline" href="/tasks?product=BRANDSPRK">Shared CRM tasks</Link>
+      <div><h1 className="text-2xl font-semibold">Investor fundraising</h1><p className="text-sm text-gray-600">Separate pre-seed pipelines. Beta-stage ventures; no investment results inferred.</p></div>
+      <Link className="text-sm text-brand-700 underline" href={`/tasks?product=${FUNDRAISING_ROUNDS[roundKey].product}`}>Shared CRM tasks</Link>
+    </div>
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Choose venture fundraising round">
+      {ROUND_KEYS.map(key => <button key={key} type="button" aria-pressed={roundKey === key} className={`rounded-lg border px-4 py-2 text-sm font-medium ${roundKey === key ? "border-brand-700 bg-brand-700 text-white" : "bg-white text-gray-700"}`} onClick={() => {
+        if (roundKey === key) return;
+        setSelected(null); setProspects([]); setPreview(null); setRows(null); setError(""); setRoundKey(key);
+      }}>{FUNDRAISING_ROUNDS[key].label} · {usd(FUNDRAISING_ROUNDS[key].targetUsd)}</button>)}
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <p className="text-gray-600">{FUNDRAISING_ROUNDS[roundKey].description}. Fundraising target; valuation terms are subject to agreement.</p>
+      <a className="text-brand-700 underline" target="_blank" rel="noopener noreferrer" href={FUNDRAISING_ROUNDS[roundKey].briefingUrl}>Open {FUNDRAISING_ROUNDS[roundKey].label} investor briefing</a>
     </div>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {[["Round target", usd(target)], ["Confirmed commitments", usd(prospects.reduce((n,p) => n + Number(p.committedUsd), 0))], ["Cash received", usd(prospects.reduce((n,p) => n + Number(p.receivedUsd), 0))], ["Actions to review", String(prospects.filter(actionable).length)]].map(([label,value]) => <div key={label} className="rounded-lg border bg-white p-4"><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-semibold">{value}</p></div>)}
@@ -127,7 +146,7 @@ export default function FundraisingPage() {
     {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     <details className="rounded-lg border bg-white p-4" open={!prospects.length}>
       <summary className="cursor-pointer font-medium">Import private funding tracker</summary>
-      <p className="my-2 text-sm text-gray-600">Choose the prepared JSON import. Review all routes below, then import. Existing source IDs are skipped. Imports create no sends, commitments or follow-up tasks.</p>
+      <p className="my-2 text-sm text-gray-600">Importing into <strong>{FUNDRAISING_ROUNDS[roundKey].label}</strong> only. Verify every route belongs to this venture before import. PlacePulse JSON must declare its roundKey. Existing source IDs are skipped; imports never create sends, commitments or follow-ups.</p>
       <label className="text-sm">JSON import file<input aria-label="JSON import file" type="file" accept=".json,application/json" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void loadImport(f); e.target.value = ""; }} className="mt-2 block" /></label>
       {preview && <div className="mt-3 space-y-3"><div className="max-h-80 overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>ID</th><th>Route</th><th>Status</th><th>Drafts</th><th>Result</th></tr></thead><tbody>{preview.map(r => <tr key={r.sourceKey} className="border-t"><td>{r.sourceKey}</td><td>{r.name}</td><td>{r.status}</td><td>{r.drafts.length}</td><td>{r.operation}</td></tr>)}</tbody></table></div><button className={buttonClass} disabled={busy} onClick={commitImport}>Import reviewed routes</button></div>}
     </details>
@@ -140,15 +159,15 @@ export default function FundraisingPage() {
     </div>
     <div className="grid items-start gap-5 xl:grid-cols-[330px_1fr]">
       <div className="space-y-2">{list.length ? list.map(p => <button key={p.id} onClick={() => setSelected(p.id)} className={`w-full rounded-lg border p-3 text-left ${selected === p.id ? "border-brand-600 bg-brand-50" : "bg-white"}`}><p className="font-medium">{p.name}</p><p className="text-xs text-gray-600">{p.priority} · {p.routeType} · {p.status.replaceAll("_", " ")}</p><p className="mt-1 line-clamp-2 text-sm">{p.nextAction}</p>{due(p) && <p className="mt-1 text-xs font-semibold text-red-700">Overdue follow-up</p>}{openFollowups(p)[0] && <p className={`mt-1 text-xs ${due(p) ? "text-red-700" : "text-gray-500"}`}>Next follow-up: {date(openFollowups(p)[0].dueDate)}</p>}</button>) : <p className="text-sm text-gray-500">No routes in this view.</p>}</div>
-      {p ? <ProspectDetail key={`${p.id}-${p.updatedAt}`} prospect={p} configured={configured} reload={reload} /> : <div className="rounded-lg border bg-white p-8 text-gray-500">Select a route to review the relationship, drafts and next action.</div>}
+      {p ? <ProspectDetail key={`${p.id}-${p.updatedAt}`} prospect={p} configured={configured} reload={reload} briefingUrl={FUNDRAISING_ROUNDS[roundKey].briefingUrl} crossVentureContacted={!!p.contact?.email && crossVentureContactEmails.includes(p.contact.email.toLowerCase())} /> : <div className="rounded-lg border bg-white p-8 text-gray-500">Select a route to review the relationship, drafts and next action.</div>}
     </div>
   </div>;
 }
 
-function ProspectDetail({ prospect: p, configured, reload }: { prospect: Prospect; configured: boolean; reload: () => Promise<void> }) {
+function ProspectDetail({ prospect: p, configured, reload, briefingUrl, crossVentureContacted }: { prospect: Prospect; configured: boolean; reload: () => Promise<void>; briefingUrl: string; crossVentureContacted: boolean }) {
   const [form, setForm] = useState(p);
   const [draftIndex, setDraftIndex] = useState(0);
-  const [subject, setSubject] = useState(p.drafts[0]?.subject ?? "BrandSprk pre-seed");
+  const [subject, setSubject] = useState(p.drafts[0]?.subject ?? `${FUNDRAISING_ROUNDS[p.roundKey].label} pre-seed`);
   const [body, setBody] = useState(p.drafts[0]?.body ?? "");
   const [kind, setKind] = useState(p.firstSentAt ? "FOLLOWUP_1" : "INITIAL");
   const [channel, setChannel] = useState("EMAIL");
@@ -204,16 +223,19 @@ function ProspectDetail({ prospect: p, configured, reload }: { prospect: Prospec
       <label className="block text-sm">Subject<input className={inputClass} value={subject} onChange={e => {setSubject(e.target.value);setApproved(false);}} /></label>
       <label className="mt-2 block text-sm">Message<textarea className={inputClass} rows={8} value={body} onChange={e => {setBody(e.target.value);setApproved(false);}} /></label>
       <p className="text-xs text-gray-500">{body.length} characters. For LinkedIn, use the limit shown in your connection box.</p>
-      <div className="mt-3 flex flex-wrap gap-3"><button className={buttonClass} disabled={busy || !subject.trim() || !body.trim()} onClick={save}>Save route and draft</button><button className="text-sm underline" onClick={() => navigator.clipboard.writeText(body).then(() => setMessage("Draft copied.")).catch(() => setMessage("Clipboard unavailable. Select and copy the message."))}>Copy message</button></div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <button type="button" className="rounded border border-brand-600 px-3 py-2 text-sm text-brand-700" onClick={() => { if (!body.includes(briefingUrl)) setBody(text => `${text.trim()}\n\nInvestor briefing: ${briefingUrl}`); setApproved(false); }}>Insert correct investor briefing</button>
+        <button className={buttonClass} disabled={busy || !subject.trim() || !body.trim()} onClick={save}>Save route and draft</button><button className="text-sm underline" onClick={() => navigator.clipboard.writeText(body).then(() => setMessage("Draft copied.")).catch(() => setMessage("Clipboard unavailable. Select and copy the message."))}>Copy message</button></div>
     </div>
     <div className="space-y-3 border-t pt-4"><h3 className="font-medium">Send or record an actual event</h3>
       <p className="text-xs text-gray-500">First sent: {date(p.firstSentAt)}. Last sent: {date(p.lastSentAt)}. Imported historical submissions have no invented send date.</p>
       <select aria-label="Send sequence step" className={inputClass} value={kind} onChange={e => {setKind(e.target.value);setApproved(false);}}>{SEND_KINDS.map(s => <option key={s}>{s}</option>)}</select>
       <label className="block text-sm"><input type="checkbox" checked={conditions} onChange={e => setConditions(e.target.checked)} /> I checked the sending condition and existing thread.</label>
       <p className="text-sm">Zoho recipient: {p.contact?.email || "Link a verified CRM contact first"}</p>
+      {crossVentureContacted && <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">This email has verified outreach for the other venture. Review that relationship before proceeding. New Zoho initial sends are blocked; log verified existing-thread activity manually.</p>}
       <p className="text-xs text-gray-500">Existing-thread replies must be sent in Zoho, then recorded below. This screen sends a new email without attachments.</p>
       <label className="block text-sm"><input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} /> I approve this exact recipient, subject and message for sending now.</label>
-      <button className={buttonClass} disabled={busy || !configured || !p.contact?.email || !approved || !conditions || p.dispatches.length > 0 || !!form.drafts[draftIndex]?.condition.toLowerCase().includes("original acknowledgement thread") || kind !== "INITIAL"} onClick={() => run("SEND", { key, kind, subject, body, to: p.contact?.email, approved, conditionsConfirmed: conditions })}>{busy ? "Working…" : "Approve and send via Zoho"}</button>
+      <button className={buttonClass} disabled={busy || !configured || !p.contact?.email || crossVentureContacted || !approved || !conditions || p.dispatches.length > 0 || !!form.drafts[draftIndex]?.condition.toLowerCase().includes("original acknowledgement thread") || kind !== "INITIAL"} onClick={() => run("SEND", { key, kind, subject, body, to: p.contact?.email, approved, conditionsConfirmed: conditions })}>{busy ? "Working…" : "Approve and send via Zoho"}</button>
       {!configured && <p className="text-xs text-gray-500">Zoho sending is not configured.</p>}
       <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Actual event time (UTC)<input className={inputClass} type="datetime-local" value={at} onChange={e => setAt(e.target.value)} /></label><label className="text-sm">Channel<select className={inputClass} value={channel} onChange={e => setChannel(e.target.value)}>{["EMAIL","LINKEDIN","WHATSAPP","CALL","MEETING","NOTE"].map(s => <option key={s}>{s}</option>)}</select></label></div>
       <label className="block text-sm"><input type="checkbox" checked={sentConfirmed} onChange={e => setSentConfirmed(e.target.checked)} /> I confirm this message was already sent outside this screen.</label>

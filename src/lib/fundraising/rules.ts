@@ -1,5 +1,26 @@
 export const ROUND_KEY = "brandsprk-preseed-2026";
 export const TARGET_USD = 300_000;
+export const ROUND_KEYS = ["brandsprk-preseed-2026", "placepulse-preseed-2026"] as const;
+export type RoundKey = typeof ROUND_KEYS[number];
+export const FUNDRAISING_ROUNDS: Record<RoundKey, { label: string; product: "BRANDSPRK" | "PLACEPULSE"; targetUsd: number; briefingUrl: string; description: string }> = {
+  "brandsprk-preseed-2026": {
+    label: "BrandSprk", product: "BRANDSPRK", targetUsd: TARGET_USD,
+    briefingUrl: "https://www.brandsprk.io/invest",
+    description: "AI-powered brand and creative decision platform",
+  },
+  "placepulse-preseed-2026": {
+    label: "PlacePulse", product: "PLACEPULSE", targetUsd: 1_500_000,
+    briefingUrl: "https://www.placepulse.io/invest",
+    description: "Evidence-governed location decision intelligence",
+  },
+};
+export function parseRoundKey(value: unknown): RoundKey {
+  return choice(value, ROUND_KEYS, "fundraising round");
+}
+export function fundraisingRound(key: string) {
+  return FUNDRAISING_ROUNDS[parseRoundKey(key)];
+}
+
 export const STATUSES = ["NOT_STARTED", "SUBMITTED_PREVIOUSLY", "NEEDS_QUALIFICATION", "CONTACTED", "REPLIED", "MEETING", "DILIGENCE", "COMMITTED", "REJECTED", "PAUSED", "HOLD"] as const;
 export const PRIORITIES = ["Now", "Qualify", "Hold"] as const;
 export const SEND_KINDS = ["INITIAL", "FOLLOWUP_1", "FOLLOWUP_2", "RESPONSE"] as const;
