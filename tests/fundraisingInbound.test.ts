@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { inquirySourceKey, parseInvestorInquiry, verifyInvestorWebhook } from "../src/lib/fundraising/inboundAuth";
+import { inquirySourceKey, parseInvestorInquiry, verifyInvestorWebhook, investorWebhookSecret } from "../src/lib/fundraising/inboundAuth";
 
 const SECRET = "local-disposable-investor-webhook-test-only-32-plus-chars";
 const time = 1795570000;
@@ -49,4 +49,20 @@ test("HMAC is time-bounded, byte-exact, and fails closed when disabled", () => {
   assert.equal(verifyInvestorWebhook({ ...args, nowSeconds: time + 301 }), false);
   assert.equal(verifyInvestorWebhook({ ...args, timestamp: "invalid" }), false);
   assert.equal(verifyInvestorWebhook({ ...args, signature: "not-a-signature" }), false);
+});
+
+test("each venture uses an independent signing key; reused keys fail closed", () => {
+  const env = {
+    CRM_INBOUND_INVESTOR_BRANDSPRK_SECRET: SECRET,
+    CRM_INBOUND_INVESTOR_PLACEPULSE_SECRET: SECRET + "-place",
+  };
+  assert.equal(investorWebhookSecret("brandsprk-preseed-2026", env), SECRET);
+  assert.equal(investorWebhookSecret("placepulse-preseed-2026", env), SECRET + "-place");
+  assert.equal(investorWebhookSecret("placepulse-preseed-2026", { ...env, CRM_INBOUND_INVESTOR_PLACEPULSE_SECRET: SECRET }), undefined);
+  assert.equal(investorWebhookSecret("placepulse-preseed-2026", {}), undefined);
+  const rawBody = Buffer.from(JSON.stringify({ ...payload, message: "Résumé — investor" }));
+  const timestamp = String(time);
+  const signature = createHmac("sha256", SECRET).update(timestamp + ".").update(rawBody).digest("hex");
+  assert.equal(verifyInvestorWebhook({ secret: SECRET, timestamp, signature, rawBody, nowSeconds: time }), true);
+  assert.equal(verifyInvestorWebhook({ secret: SECRET + "-place", timestamp, signature, rawBody, nowSeconds: time }), false);
 });
